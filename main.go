@@ -18,19 +18,16 @@ import (
 var frontendFS embed.FS
 
 func main() {
-	// Create data directory next to binary
 	dataDir := "./data"
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		log.Fatal("Failed to create data directory:", err)
 	}
 
-	// Init DB
 	db, err := auth.InitDB(dataDir + "/cloudone.db")
 	if err != nil {
 		log.Fatal("Failed to init DB:", err)
 	}
 
-	// Default storage dir
 	storageDir := dataDir + "/storage"
 	if err := os.MkdirAll(storageDir, 0755); err != nil {
 		log.Fatal("Failed to create storage directory:", err)
@@ -52,7 +49,6 @@ func main() {
 
 	h := handler.New(db, fileManager, shareManager)
 
-	// API routes
 	api := r.Group("/api")
 	{
 		api.POST("/auth/setup", h.Setup)
@@ -83,31 +79,40 @@ func main() {
 		}
 	}
 
-	// Public file access
 	r.GET("/public", h.ListPublicFiles)
 	r.GET("/raw/*path", h.ServePublicFile)
 	r.GET("/s/:code", h.AccessShare)
 	r.GET("/s/:code/raw", h.DownloadShare)
 
-	// Serve frontend
+	// 把前端 dist 挂载为子文件系统
 	sub, err := fs.Sub(frontendFS, "frontend/dist")
 	if err != nil {
 		log.Fatal(err)
 	}
+	staticFS := http.FS(sub)
+
+	// 明确注册 GET / 避免 gin 触发 301
+	r.GET("/", func(c *gin.Context) {
+		c.FileFromFS("index.html", staticFS)
+	})
+
+	// 所有其他路由：先尝试静态文件，找不到就返回 index.html（SPA fallback）
 	r.NoRoute(func(c *gin.Context) {
-		// Try static file first
 		path := c.Request.URL.Path
-		if path == "/" || path == "" {
-			c.FileFromFS("index.html", http.FS(sub))
+		// 去掉开头的 /
+		filePath := path
+		if len(filePath) > 0 && filePath[0] == '/' {
+			filePath = filePath[1:]
+		}
+		// 尝试打开静态文件
+		f, err := sub.Open(filePath)
+		if err == nil {
+			f.Close()
+			c.FileFromFS(filePath, staticFS)
 			return
 		}
-		f, err := sub.Open(path[1:])
-		if err != nil {
-			c.FileFromFS("index.html", http.FS(sub))
-			return
-		}
-		f.Close()
-		c.FileFromFS(path[1:], http.FS(sub))
+		// 找不到就返回 index.html（Vue Router 接管）
+		c.FileFromFS("index.html", staticFS)
 	})
 
 	log.Println("CloudOne starting on :6677")
