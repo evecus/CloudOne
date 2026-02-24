@@ -2,7 +2,6 @@ package handler
 
 import (
 	"fmt"
-	"net/http"
 	"path/filepath"
 	"strconv"
 	"strings"
