@@ -5,6 +5,7 @@ import (
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 type User struct {
@@ -39,15 +40,18 @@ type FileVisibility struct {
 }
 
 func InitDB(path string) (*gorm.DB, error) {
-	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent), // 不打印 record not found
+	})
 	if err != nil {
 		return nil, err
 	}
 	db.AutoMigrate(&User{}, &Settings{}, &ShareLink{}, &FileVisibility{})
 
-	// Ensure default settings
-	var s Settings
-	if db.First(&s).Error != nil {
+	// 用 Count 代替 First，避免触发 "record not found" 错误日志
+	var count int64
+	db.Model(&Settings{}).Count(&count)
+	if count == 0 {
 		db.Create(&Settings{StorageDir: "./data/storage", Lang: "zh"})
 	}
 
