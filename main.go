@@ -38,6 +38,8 @@ func main() {
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
+    r.RedirectTrailingSlash = false  // 加这一行
+    r.RedirectFixedPath = false      // 加这一行
 
 	r.Use(cors.New(cors.Config{
 		AllowAllOrigins:  true,
