@@ -38,12 +38,12 @@ jobs:
           go mod tidy
           go mod download
 
-      #- name: Build for Linux amd64
-       # env:
-        #  GOOS: linux
-         # GOARCH: amd64
-          #CGO_ENABLED: 1
-        #run: go build -o cloudone-linux-amd64 .
+      - name: Build for Linux amd64
+        env:
+          GOOS: linux
+          GOARCH: amd64
+          CGO_ENABLED: 1
+        run: go build -o cloudone-linux-amd64 .
 
       - name: Build for Linux arm64
         env:
