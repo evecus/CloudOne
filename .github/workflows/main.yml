@@ -2,8 +2,12 @@ name: Build CloudOne
 
 on:
   workflow_dispatch:
-  push:
-    tags: ['v*']
+    inputs:
+      tag:
+        description: '发布版本号，例如 v1.2.0'
+        required: true
+        default: 'v1.0.0'
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -12,13 +16,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # --- 前端构建部分 ---
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          #cache: 'npm'
-          #cache-dependency-path: frontend/package-lock.json
 
       - name: Build frontend
         working-directory: frontend
@@ -26,27 +27,23 @@ jobs:
           npm install
           npm run build
 
-      # --- 后端构建部分 ---
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.21'
-          cache: true # 自动缓存 Go 模块和构建缓存
+          cache: true
 
-      - name: Sync and Download dependencies
+      - name: Download dependencies
         run: |
-          # 核心修复步骤：同步 go.mod 和 go.sum，确保依赖完整
           go mod tidy
           go mod download
 
-      - name: Build for Linux amd64
-        env:
-          GOOS: linux
-          GOARCH: amd64
-          CGO_ENABLED: 1 # 如果你的项目使用了 SQLite (CGO)，则必须开启
-        run: |
-          # ubuntu-latest 默认已安装 gcc，直接编译即可
-          go build -ldflags="-s -w" -o cloudone-linux-amd64 .
+      #- name: Build for Linux amd64
+       # env:
+        #  GOOS: linux
+         # GOARCH: amd64
+          #CGO_ENABLED: 1
+        #run: go build -o cloudone-linux-amd64 .
 
       - name: Build for Linux arm64
         env:
@@ -55,9 +52,8 @@ jobs:
           CGO_ENABLED: 1
           CC: aarch64-linux-gnu-gcc
         run: |
-          # 交叉编译 arm64 需要安装特定的工具链
           sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
-          go build -ldflags="-s -w" -o cloudone-linux-arm64 .
+          go build -o cloudone-linux-arm64 .
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -68,11 +64,10 @@ jobs:
             cloudone-linux-arm64
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
     permissions:
-      contents: write # 赋予 Release 写入权限
+      contents: write
 
     steps:
       - name: Download artifacts
@@ -83,9 +78,11 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event.inputs.tag }}
+          name: CloudOne ${{ github.event.inputs.tag }}
+          generate_release_notes: true
           files: |
             cloudone-linux-amd64
             cloudone-linux-arm64
-          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
