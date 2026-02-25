@@ -33,9 +33,24 @@
       <template v-else-if="data">
         <div class="share-card">
 
+          <!-- 单文件下载视图（直接分享文件 或 从目录点进来的文件） -->
+          <div v-if="fileView" class="share-file">
+            <button v-if="data.is_dir" class="back-btn" @click="fileView = null">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><polyline points="15 18 9 12 15 6"/></svg>
+              返回
+            </button>
+            <div class="file-preview-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </div>
+            <h2>{{ fileView.name }}</h2>
+            <a :href="fileView.downloadUrl" class="download-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              下载
+            </a>
+          </div>
+
           <!-- 目录视图 -->
-          <div v-if="isDir" class="share-dir">
-            <!-- 面包屑 -->
+          <div v-else-if="data.is_dir" class="share-dir">
             <div class="breadcrumb">
               <button class="crumb-btn" @click="navigateTo(null)">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
@@ -47,7 +62,6 @@
               </template>
             </div>
 
-            <!-- 文件列表 -->
             <div v-if="dirLoading" class="loading-state" style="padding:40px"><div class="spinner-lg"></div></div>
             <div v-else class="file-list">
               <div v-if="!currentFiles.length" class="empty-dir">
@@ -56,9 +70,8 @@
               </div>
               <div
                 v-for="f in currentFiles" :key="f.path"
-                class="file-item"
-                :class="{ clickable: f.is_dir }"
-                @click="f.is_dir && enterDir(f)"
+                class="file-item clickable"
+                @click="f.is_dir ? enterDir(f) : openFile(f)"
               >
                 <svg v-if="f.is_dir" viewBox="0 0 24 24" fill="currentColor" class="ficon folder"><path d="M10 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2h-8l-2-2z"/></svg>
                 <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="ficon"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
@@ -71,15 +84,15 @@
             </div>
           </div>
 
-          <!-- 单文件视图 -->
+          <!-- 直接分享的单文件 -->
           <div v-else class="share-file">
             <div class="file-preview-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
             </div>
             <h2>{{ fileName }}</h2>
-            <a :href="`/s/${$route.params.code}/raw`" class="download-btn">
+            <a :href="`/api/s/${route.params.code}/download`" class="download-btn">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Download
+              下载
             </a>
           </div>
 
@@ -102,7 +115,8 @@ const subPath = ref([])
 const currentFiles = ref([])
 const dirLoading = ref(false)
 
-const isDir = computed(() => data.value?.is_dir === true)
+// 目录内点击文件后切换到单文件下载视图
+const fileView = ref(null) // { name, downloadUrl }
 
 const rootName = computed(() => {
   if (!data.value) return ''
@@ -121,6 +135,15 @@ function formatSize(bytes) {
   const units = ['B','KB','MB','GB']
   const i = Math.floor(Math.log(bytes) / Math.log(1024))
   return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + units[i]
+}
+
+// 目录内点击文件，切换到下载视图
+function openFile(f) {
+  const sp = [...subPath.value, f.name].join('/')
+  fileView.value = {
+    name: f.name,
+    downloadUrl: `/api/s/${route.params.code}/download?subpath=${encodeURIComponent(sp)}`
+  }
 }
 
 async function enterDir(f) {
@@ -187,7 +210,6 @@ onMounted(async () => {
 .file-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; transition: background .15s; }
 .file-item.clickable { cursor: pointer; }
 .file-item.clickable:hover { background: var(--blue-50); }
-.file-item:not(.clickable):hover { background: var(--gray-50); }
 .ficon { width: 18px; height: 18px; flex-shrink: 0; color: var(--gray-400); }
 .ficon.folder { color: #F59E0B; }
 .fname { flex: 1; font-size: 14px; color: var(--gray-700); }
@@ -197,6 +219,8 @@ onMounted(async () => {
 .empty-dir svg { width: 40px; height: 40px; }
 .empty-dir span { font-size: 13px; color: var(--gray-400); }
 .share-file { text-align: center; }
+.back-btn { display: flex; align-items: center; gap: 5px; background: none; border: none; color: var(--blue-600); font-size: 13px; font-family: inherit; cursor: pointer; padding: 4px 8px; border-radius: 6px; margin-bottom: 24px; transition: background .15s; }
+.back-btn:hover { background: var(--blue-50); }
 .file-preview-icon { width: 80px; height: 80px; background: var(--blue-50); border-radius: 20px; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; color: var(--blue-500); }
 .file-preview-icon svg { width: 40px; height: 40px; }
 .share-file h2 { font-size: 22px; font-weight: 600; color: var(--gray-800); margin-bottom: 24px; }
