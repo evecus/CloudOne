@@ -12,6 +12,15 @@ import (
 	"gorm.io/gorm"
 )
 
+// skipDirs 是存储根目录为 / 时需要跳过的危险虚拟/特殊文件系统目录。
+// 读取这些目录会触发内核持续生成数据，导致内存暴涨甚至卡死。
+var skipDirs = map[string]struct{}{
+	"/proc": {},
+	"/sys":  {},
+	"/dev":  {},
+	"/run":  {},
+}
+
 type FileInfo struct {
 	Name     string      `json:"name"`
 	Path     string      `json:"path"`
@@ -141,6 +150,13 @@ func (m *Manager) ListDir(rel string) ([]FileInfo, error) {
 
 	result := make([]FileInfo, 0, len(entries))
 	for _, e := range entries {
+		// 跳过危险的虚拟文件系统目录，防止存储根为 / 时内存暴涨
+		if e.IsDir() {
+			if _, skip := skipDirs["/"+e.Name()]; skip && abs == "/" {
+				continue
+			}
+		}
+
 		info, _ := e.Info()
 		childRel := normalizePath(norm + "/" + e.Name())
 
