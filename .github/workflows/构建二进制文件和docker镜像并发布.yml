@@ -9,9 +9,9 @@ on:
         default: 'v1.0.0'
 
 jobs:
-  # ===================== 构建二进制 =====================
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,7 +43,7 @@ jobs:
           GOOS: linux
           GOARCH: amd64
           CGO_ENABLED: 1
-        run: go build -ldflags="-s -w" -o cloudone-linux-amd64 .
+        run: go build -o cloudone-linux-amd64 .
 
       - name: Build for Linux arm64
         env:
@@ -53,7 +53,7 @@ jobs:
           CC: aarch64-linux-gnu-gcc
         run: |
           sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
-          go build -ldflags="-s -w" -o cloudone-linux-arm64 .
+          go build -o cloudone-linux-arm64 .
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -62,7 +62,7 @@ jobs:
           path: |
             cloudone-linux-amd64
             cloudone-linux-arm64
-
+  
   # ===================== 发布 Release =====================
   release:
     needs: build
