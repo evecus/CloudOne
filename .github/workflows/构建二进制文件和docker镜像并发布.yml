@@ -1,0 +1,124 @@
+name: 构建二进制文件和docker镜像并发布
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '发布版本号，例如 v1.2.0'
+        required: true
+        default: 'v1.0.0'
+
+jobs:
+  # ===================== 构建二进制 =====================
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm install
+          npm run build
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Download dependencies
+        run: |
+          go mod tidy
+          go mod download
+
+      - name: Build for Linux amd64
+        env:
+          GOOS: linux
+          GOARCH: amd64
+          CGO_ENABLED: 1
+        run: go build -ldflags="-s -w" -o cloudone-linux-amd64 .
+
+      - name: Build for Linux arm64
+        env:
+          GOOS: linux
+          GOARCH: arm64
+          CGO_ENABLED: 1
+          CC: aarch64-linux-gnu-gcc
+        run: |
+          sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+          go build -ldflags="-s -w" -o cloudone-linux-arm64 .
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudone-binaries
+          path: |
+            cloudone-linux-amd64
+            cloudone-linux-arm64
+
+  # ===================== 发布 Release =====================
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: cloudone-binaries
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag }}
+          name: CloudOne ${{ github.event.inputs.tag }}
+          generate_release_notes: true
+          files: |
+            cloudone-linux-amd64
+            cloudone-linux-arm64
+
+  # ===================== 构建并推送 Docker 镜像 =====================
+  docker:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: cloudone-binaries
+
+      - name: Set up QEMU（多平台支持）
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: .github/Dockerfile.release
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/cloudone:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/cloudone:${{ github.event.inputs.tag }}
+          build-args: |
+            VERSION=${{ github.event.inputs.tag }}
