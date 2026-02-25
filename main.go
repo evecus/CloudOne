@@ -168,6 +168,7 @@ func main() {
 
 		// 分享码 API（无需登录）
 		api.GET("/s/:code", h.AccessShare)
+		api.GET("/s/:code/download", h.DownloadShare)
 	}
 
 	// 公开文件 API（无需登录）
