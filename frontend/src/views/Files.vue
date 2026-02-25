@@ -297,7 +297,7 @@
               {{ t.download }}
             </button>
           </div>
-          <div v-else-if="fileViewMode==='text'" class="field" style="flex:1">
+          <div v-else-if="fileViewMode==='text'" class="field edit-field-wrap" style="flex:1">
             <p v-if="editError" class="edit-error">{{ editError }}</p>
             <textarea v-else v-model="editContent" class="code-editor" rows="20" spellcheck="false"></textarea>
           </div>
@@ -1171,9 +1171,12 @@ onUnmounted(() => { document.removeEventListener('keydown', onKeydown) })
 
 /* 弹窗通用 */
 .modal-bg { position:fixed; inset:0; background:rgba(15,23,42,.45); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; z-index:100; }
-.modal { background:white; border-radius:20px; padding:32px; width:440px; max-width:90vw; box-shadow:var(--shadow-lg); animation:modalIn .2s cubic-bezier(.4,0,.2,1); }
+.modal { background:white; border-radius:20px; padding:32px; width:440px; max-width:90vw; box-shadow:var(--shadow-lg); animation:modalIn .2s cubic-bezier(.4,0,.2,1); overflow:hidden; }
 .modal-lg { width:520px; }
-.modal-xl { width:760px; max-height:90vh; display:flex; flex-direction:column; }
+.modal-xl { width:760px; max-height:90vh; display:flex; flex-direction:column; padding:0; background:#F8FAFC; }
+.modal-xl .modal-titlebar { padding:20px 24px 18px; border-bottom:2px solid var(--gray-200); margin-bottom:0; background:#F1F5F9; border-radius:20px 20px 0 0; }
+.modal-xl .field { padding:0; margin:0; background:#F8FAFC; flex:1; display:flex; flex-direction:column; }
+.modal-xl .modal-actions { padding:14px 24px; border-top:2px solid var(--gray-200); background:#F1F5F9; margin-top:0; border-radius:0 0 20px 20px; }
 .modal-move { width:500px; display:flex; flex-direction:column; }
 @keyframes modalIn { from{opacity:0;transform:scale(.95) translateY(8px)} to{opacity:1;transform:scale(1) translateY(0)} }
 .modal-titlebar { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
@@ -1197,7 +1200,8 @@ onUnmounted(() => { document.removeEventListener('keydown', onKeydown) })
 .field label { display:block; font-size:13px; font-weight:500; color:var(--gray-600); margin-bottom:8px; }
 .field input,.field textarea:not(.code-editor) { width:100%; padding:10px 14px; border:1.5px solid var(--gray-200); border-radius:var(--radius-sm); font-size:14px; font-family:inherit; color:var(--gray-800); outline:none; resize:vertical; transition:var(--transition); box-sizing:border-box; }
 .field input:focus,.field textarea:not(.code-editor):focus { border-color:var(--blue-500); box-shadow:0 0 0 3px rgba(59,130,246,.1); }
-.code-editor { font-family:'JetBrains Mono','Courier New',monospace; font-size:13px; line-height:1.6; flex:1; min-height:300px; background:white !important; color:#1E293B !important; border:1.5px solid var(--gray-200); border-radius:10px; padding:16px; resize:none; outline:none; width:100%; box-sizing:border-box; transition:border-color .2s; }
+.edit-field-wrap { padding:16px 20px; flex:1; display:flex; flex-direction:column; background:#F1F5F9; overflow:hidden; }
+.code-editor { font-family:'JetBrains Mono','Courier New',monospace; font-size:13px; line-height:1.6; flex:1; min-height:300px; background:white !important; color:#1E293B !important; border:1.5px solid var(--gray-200); border-radius:10px; padding:16px; resize:none; outline:none; width:100%; box-sizing:border-box; transition:border-color .2s; box-shadow:0 2px 8px rgba(15,23,42,0.08); }
 .code-editor:focus { border-color:var(--blue-500); box-shadow:0 0 0 3px rgba(59,130,246,.15); }
 .upload-area { border:2px dashed var(--gray-200); border-radius:var(--radius); padding:36px; text-align:center; cursor:pointer; transition:var(--transition); margin-bottom:14px; }
 .upload-area:hover { border-color:var(--blue-400); background:var(--blue-50); }
