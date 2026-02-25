@@ -384,7 +384,6 @@
           <!-- 第二步：分享已创建，显示链接 -->
           <template v-else>
             <div class="share-link-box"><input readonly :value="shareUrl" class="share-input"/></div>
-            <p class="share-raw">{{ t.rawLink }}: <a :href="rawShareUrl" target="_blank">{{ rawShareUrl }}</a></p>
             <div class="modal-actions">
               <button class="btn-ghost" @click="showShareModal=false;shareResult=null">{{ t.cancel }}</button>
               <button class="btn-primary-sm" @click="copyShareAndClose">
