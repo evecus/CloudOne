@@ -726,27 +726,6 @@ func (h *Handler) AccessShare(c *gin.Context) {
 	}
 }
 
-func (h *Handler) DownloadShare(c *gin.Context) {
-	code := c.Param("code")
-	link, err := h.shares.Get(code)
-	if err != nil {
-		c.JSON(404, gin.H{"error": "not found"})
-		return
-	}
-	if link.IsDir {
-		c.JSON(400, gin.H{"error": "cannot download directory directly"})
-		return
-	}
-	abs, err := h.files.AbsPath(link.FilePath)
-	if err != nil {
-		c.JSON(400, gin.H{"error": "invalid path"})
-		return
-	}
-	name := filepath.Base(abs)
-	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, name))
-	c.File(abs)
-}
-
 // BatchDelete 批量删除文件/目录
 func (h *Handler) BatchDelete(c *gin.Context) {
 	var req struct {
