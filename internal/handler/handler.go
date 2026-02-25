@@ -528,6 +528,33 @@ func (h *Handler) ServeRaw(c *gin.Context) {
 	serveRaw(c, abs)
 }
 
+// DownloadShare 下载分享的文件（单文件分享 或 目录分享内的文件，通过 ?subpath= 指定）
+func (h *Handler) DownloadShare(c *gin.Context) {
+	code := c.Param("code")
+	link, err := h.shares.Get(code)
+	if err != nil {
+		c.JSON(404, gin.H{"error": "not found"})
+		return
+	}
+	var filePath string
+	if link.IsDir {
+		subpath := c.Query("subpath")
+		if subpath == "" {
+			c.JSON(400, gin.H{"error": "subpath required for directory share"})
+			return
+		}
+		filePath = link.FilePath + "/" + subpath
+	} else {
+		filePath = link.FilePath
+	}
+	abs, err := h.files.AbsPath(filePath)
+	if err != nil {
+		c.JSON(400, gin.H{"error": "invalid path"})
+		return
+	}
+	c.FileAttachment(abs, filepath.Base(abs))
+}
+
 // browserPreviewable 判断浏览器是否能原生预览该 MIME 类型。
 // 可预览 → inline（浏览器直接展示）
 // 不可预览 → attachment（强制下载）
