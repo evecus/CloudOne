@@ -15,10 +15,17 @@ import (
 // skipDirs 是存储根目录为 / 时需要跳过的危险虚拟/特殊文件系统目录。
 // 读取这些目录会触发内核持续生成数据，导致内存暴涨甚至卡死。
 var skipDirs = map[string]struct{}{
-	"/proc": {},
-	"/sys":  {},
-	"/dev":  {},
-	"/run":  {},
+	"/proc":       {},
+	"/sys":        {},
+	"/dev":        {},
+	"/run":        {},
+	"/bin":        {},
+	"/sbin":       {},
+	"/lib":        {},
+	"/lib32":      {},
+	"/lib64":      {},
+	"/libx32":     {},
+	"/lost+found": {},
 }
 
 type FileInfo struct {
