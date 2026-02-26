@@ -287,7 +287,7 @@ onMounted(loadSettings)
 </script>
 
 <style scoped>
-.webdav-page { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.webdav-page { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
 
 /* 桌面端顶部栏 */
 .page-header {
@@ -462,6 +462,11 @@ onMounted(loadSettings)
 
 @media (max-width: 768px) {
   .page-header { display: none; }
+
+  /* 移动端页面整体可滚动，不锁死 */
+  .webdav-page { overflow-y: auto; }
+  /* 已启用时内容区不再自己滚动，交给外层 */
+  .webdav-content { overflow-y: visible; }
 
   .mobile-header {
     display: flex; align-items: center; justify-content: space-between;
