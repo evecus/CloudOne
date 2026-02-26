@@ -38,18 +38,11 @@ jobs:
           go mod tidy
           go mod download
 
-      - name: Build for Linux amd64
-        env:
-          GOOS: linux
-          GOARCH: amd64
-          CGO_ENABLED: 1
-        run: go build -o cloudone-linux-amd64 .
-
       - name: Build for Linux arm64
         env:
           GOOS: linux
           GOARCH: arm64
-          CGO_ENABLED: 1
+          CGO_ENABLED: 0
           CC: aarch64-linux-gnu-gcc
         run: |
           sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
