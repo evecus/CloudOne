@@ -1,10 +1,8 @@
-# 直接使用 build job 产出的二进制，按平台选择对应文件
-FROM alpine:3.19
+# 放弃 Alpine，改用 Debian 精简版
+FROM debian:bookworm-slim
 
 ARG TARGETARCH
-ARG VERSION=latest
-
-RUN apk add --no-cache ca-certificates tzdata
+RUN apt-get update && apt-get install -y ca-certificates tzdata && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
