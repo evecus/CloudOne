@@ -97,6 +97,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: cloudone-binaries
+          path: .
 
       - name: Set up QEMU（多平台支持）
         uses: docker/setup-qemu-action@v3
