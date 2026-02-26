@@ -8,6 +8,6 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/google/uuid v1.6.0
 	golang.org/x/crypto v0.21.0
-	gorm.io/driver/sqlite v1.5.5
+	github.com/glebarez/sqlite
 	gorm.io/gorm v1.25.7
 )
