@@ -1,9 +1,0 @@
-services:
-  cloudone:
-    container_name: cloudone
-    restart: unless-stopped
-    user: root
-    ports:
-      - "6677:6677"
-    volumes:
-      - ./data:/app/data
