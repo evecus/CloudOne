@@ -1,6 +1,7 @@
 services:
   cloudone:
     container_name: cloudone
+    image: evecus/cloudone:latest
     restart: unless-stopped
     user: root
     ports:
