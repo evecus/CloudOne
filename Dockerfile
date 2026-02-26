@@ -1,8 +1,9 @@
-# 放弃 Alpine，改用 Debian 精简版
-FROM debian:bookworm-slim
+FROM alpine:3.19
 
 ARG TARGETARCH
-RUN apt-get update && apt-get install -y ca-certificates tzdata && rm -rf /var/lib/apt/lists/*
+ARG VERSION=latest
+
+RUN apk add --no-cache ca-certificates tzdata
 
 WORKDIR /app
 
