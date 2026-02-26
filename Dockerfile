@@ -1,26 +1,20 @@
-# 直接使用 build job 产出的二进制，按平台选择对应文件
 FROM alpine:3.19
 
 ARG TARGETARCH
-ARG VERSION=latest
-
 RUN apk add --no-cache ca-certificates tzdata
 
 WORKDIR /app
 
-RUN mkdir -p /app/data && chmod 755 /app/data
-RUN mkdir -p /app/data/storage && chmod 755 /app/data/storage
+# 明确创建目录
+RUN mkdir -p /app/data/storage
 
-# 根据目标架构复制对应二进制
-COPY cloudone-linux-${TARGETARCH} ./cloudone
+# 建议在 COPY 前打印一下，或者利用通配符防止 arch 字符串微小差异
+COPY cloudone-linux-${TARGETARCH}* ./cloudone
 RUN chmod +x ./cloudone
 
+# 如果 CGO_ENABLED=1 且用 Alpine，必须加这个软链接(或者换 base image)
+RUN mkdir /lib64 && ln -s /lib/libc.musl-x86_64.so.1 /lib64/ld-linux-x86-64.so.2
+
 VOLUME ["/app/data"]
-
 EXPOSE 6677
-
-LABEL org.opencontainers.image.title="CloudOne" \
-      org.opencontainers.image.version="${VERSION}" \
-      org.opencontainers.image.description="CloudOne File Manager"
-
 CMD ["./cloudone"]
