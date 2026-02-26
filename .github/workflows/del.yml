@@ -1,0 +1,44 @@
+name: 删除main代码
+
+on:
+  # 建议设为手动触发，防止误删
+  workflow_dispatch:
+
+jobs:
+  delete-files:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # 赋予写入权限以提交更改
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0 # 获取完整历史以确保推送顺利
+
+      - name: Remove all files except .github
+        run: |
+          # 开启扩展通配符模式 (extglob)
+          shopt -s extglob
+          
+          # 删除当前目录下除了 .github 以外的所有内容
+          # !(pattern) 会匹配所有不符合 pattern 的项
+          rm -rf !(.github)
+          
+          echo "Cleanup completed. Remaining files:"
+          ls -a
+
+      - name: Commit and Push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 检查是否有文件被删除（避免空提交报错）
+          if [ -n "$(git status --porcelain)" ]; then
+            git add .
+            git commit -m "chore: cleanup main branch, keeping only .github folder"
+            git push origin main
+          else
+            echo "No changes to commit"
+          fi
