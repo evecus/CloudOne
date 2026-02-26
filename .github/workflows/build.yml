@@ -1,4 +1,4 @@
-name: Build CloudOne
+name: 构建正式版本
 
 on:
   workflow_dispatch:
@@ -38,6 +38,13 @@ jobs:
           go mod tidy
           go mod download
 
+      - name: Build for Linux amd64
+        env:
+          GOOS: linux
+          GOARCH: amd64
+          CGO_ENABLED: 1
+        run: go build -ldflags="-s -w" -o cloudone-linux-amd64 .
+
       - name: Build for Linux arm64
         env:
           GOOS: linux
@@ -46,7 +53,7 @@ jobs:
           CC: aarch64-linux-gnu-gcc
         run: |
           sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
-          go build -o cloudone-linux-arm64 .
+          go build -ldflags="-s -w" -o cloudone-linux-arm64 .
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
