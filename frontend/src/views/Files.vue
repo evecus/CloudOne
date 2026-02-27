@@ -1060,15 +1060,22 @@ function exitSelectAndClose(which) {
 // ── 右键菜单 ──────────────────────────────────────
 function openCtxMenu(e, file) {
   closeCtxMenu()
-  // 动态估算菜单高度：基础项 + 可能的「下载」「解压」项
-  const baseH = file.is_dir ? 360 : 390
-  const extraH = isArchive(file.name) ? 36 : 0
-  const menuW = 200, menuH = baseH + extraH
+  // 先在点击位置渲染，nextTick 后拿到真实尺寸再修正
+  const menuW = 210
   let x = e.clientX, y = e.clientY
-  if (x + menuW > window.innerWidth)  x = window.innerWidth  - menuW - 8
-  if (y + menuH > window.innerHeight) y = window.innerHeight - menuH - 8
+  if (x + menuW > window.innerWidth) x = window.innerWidth - menuW - 8
   if (y < 8) y = 8
   ctxMenu.value = { show:true, x, y, file }
+  nextTick(() => {
+    const el = document.querySelector('.ctx-menu')
+    if (!el) return
+    const menuH = el.offsetHeight
+    if (y + menuH > window.innerHeight - 8) {
+      y = window.innerHeight - menuH - 8
+      if (y < 8) y = 8
+      ctxMenu.value = { ...ctxMenu.value, y }
+    }
+  })
 }
 function closeCtxMenu() { ctxMenu.value = { show:false, x:0, y:0, file:null } }
 
@@ -1084,8 +1091,8 @@ function onTouchStart(e, file) {
       const extraH = isArchive(file.name) ? 36 : 0
       const menuH = baseH + extraH
       const x = window.innerWidth - menuW - 8
-      // 固定 y=135
-      const y = 135
+      // 固定 y=140
+      const y = 140
       ctxMenu.value = { show:true, x, y, file }
     }
   }, 500)
