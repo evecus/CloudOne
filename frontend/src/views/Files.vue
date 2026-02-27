@@ -326,6 +326,10 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             <span>{{ lang==='zh' ? '信息' : 'Info' }}</span>
           </div>
+          <div class="ctx-item" @click="ctxAction('rename')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+            <span>{{ t.rename }}</span>
+          </div>
           <div class="ctx-divider"></div>
           <div class="ctx-item ctx-item-danger" @click="ctxAction('delete')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
@@ -482,6 +486,29 @@
           <div class="modal-actions">
             <button class="btn-ghost" @click="showChmod=false">{{ t.cancel }}</button>
             <button class="btn-primary-sm" @click="doChmod">{{ t.permApply }}</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 重命名弹窗 -->
+      <div v-if="showRename" class="modal-bg rename-modal-bg" @click.self="showRename=false">
+        <div class="modal rename-modal">
+          <h3>{{ t.rename }}</h3>
+          <div class="rename-input-wrap">
+            <input
+              ref="renameInputRef"
+              v-model="renameValue"
+              class="rename-input"
+              :placeholder="t.rename"
+              @keyup.enter="doRename"
+              @keyup.esc="showRename=false"
+              spellcheck="false"
+              autocomplete="off"
+            />
+          </div>
+          <div class="modal-actions rename-actions">
+            <button class="btn-ghost" @click="showRename=false">{{ t.cancel }}</button>
+            <button class="btn-primary-sm" @click="doRename" :disabled="!renameValue.trim() || renameValue.trim()===renameTarget?.name">{{ t.save }}</button>
           </div>
         </div>
       </div>
@@ -890,6 +917,10 @@ const showBatchDelete = ref(false)
 const showDirModal = ref(false)
 const showCompress = ref(false)
 const showFetch = ref(false)
+const showRename = ref(false)
+const renameTarget = ref(null)
+const renameValue = ref('')
+const renameInputRef = ref(null)
 const showSearch = ref(false)
 const showSearchResult = ref(false)
 
@@ -1081,6 +1112,7 @@ async function ctxAction(action) {
     case 'togglePublic': togglePublic(file); break
     case 'chmod': await openChmod(file); break
     case 'info': infoTarget.value = file; break
+    case 'rename': openRename(file); break
     case 'delete': confirmDelete(file); break
     case 'move':
       singleOpFile.value = file
@@ -1362,6 +1394,37 @@ function fallbackCopy(text) {
   document.body.removeChild(el)
 }
 function confirmDelete(file) { deleteTarget.value=file }
+
+function openRename(file) {
+  renameTarget.value = file
+  renameValue.value = file.name
+  showRename.value = true
+  nextTick(() => {
+    if (renameInputRef.value) {
+      renameInputRef.value.focus()
+      // 选中名字（不含扩展名）方便直接改名
+      const name = file.name
+      const dotIdx = !file.is_dir ? name.lastIndexOf('.') : -1
+      const selEnd = dotIdx > 0 ? dotIdx : name.length
+      renameInputRef.value.setSelectionRange(0, selEnd)
+    }
+  })
+}
+
+async function doRename() {
+  const file = renameTarget.value
+  const newName = renameValue.value.trim()
+  if (!newName || newName === file.name) { showRename.value = false; return }
+  const dir = file.path.substring(0, file.path.lastIndexOf('/')) || '/'
+  const newPath = (dir === '/' ? '' : dir) + '/' + newName
+  try {
+    await api.post('/files/move', { src: file.path, dst: newPath })
+    showRename.value = false
+    load()
+  } catch(e) {
+    alert(e.response?.data?.error || (lang.value === 'zh' ? '重命名失败' : 'Rename failed'))
+  }
+}
 async function doDelete() { await api.delete('/files',{params:{path:deleteTarget.value.path}}); deleteTarget.value=null; load() }
 async function doMkdir() {
   if (!newDirName.value) return
@@ -1979,5 +2042,77 @@ onUnmounted(() => { document.removeEventListener('keydown', onKeydown) })
   .mob-crumb-item { max-width:80px; }
   /* 极小屏隐藏预览行的 Scope 文字，只留路径 */
   .search-scope-preview > span:first-of-type { display:none; }
+}
+/* ── 重命名弹窗 ── */
+.rename-modal {
+  width: 400px !important;
+  max-width: 92vw !important;
+  padding: 28px 28px 24px !important;
+}
+.rename-modal h3 {
+  margin: 0 0 20px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--gray-900);
+  text-align: center;
+}
+.rename-input-wrap {
+  display: flex;
+  justify-content: center;
+}
+.rename-input {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1.5px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--gray-900);
+  background: var(--gray-50);
+  transition: var(--transition);
+  outline: none;
+  box-sizing: border-box;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rename-input:focus {
+  border-color: var(--primary);
+  background: white;
+  box-shadow: 0 0 0 3px rgba(37,99,235,.08);
+}
+.rename-actions {
+  justify-content: center !important;
+  gap: 12px !important;
+  margin-top: 20px;
+}
+.rename-actions .btn-ghost,
+.rename-actions .btn-primary-sm {
+  min-width: 96px;
+  justify-content: center;
+}
+
+/* 移动端：重命名弹窗居中而非底部弹出 */
+@media (max-width: 768px) {
+  .rename-modal-bg {
+    align-items: center !important;
+  }
+  .rename-modal {
+    width: 88vw !important;
+    max-width: 360px !important;
+    border-radius: 18px !important;
+    padding: 24px 20px 20px !important;
+  }
+  .rename-input {
+    font-size: 16px; /* 防 iOS 自动缩放 */
+    padding: 13px 14px;
+  }
+  .rename-actions .btn-ghost,
+  .rename-actions .btn-primary-sm {
+    flex: 1;
+    min-width: 0;
+    padding: 11px 10px;
+    font-size: 15px;
+  }
 }
 </style>
