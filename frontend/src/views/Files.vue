@@ -1091,8 +1091,8 @@ function onTouchStart(e, file) {
       const extraH = isArchive(file.name) ? 36 : 0
       const menuH = baseH + extraH
       const x = window.innerWidth - menuW - 8
-      // 固定 y=140
-      const y = 140
+      // 固定 y=132
+      const y = 132
       ctxMenu.value = { show:true, x, y, file }
     }
   }, 500)
