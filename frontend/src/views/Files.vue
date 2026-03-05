@@ -1561,10 +1561,10 @@ watch(() => _route.params.pathMatch, (val) => {
 .files-page { flex:1; display:flex; flex-direction:column; height:100%; overflow:hidden; }
 .page-header { padding:14px 28px; border-bottom:1px solid var(--gray-100); display:flex; align-items:center; justify-content:space-between; background:white; flex-shrink:0; gap:12px; min-height:60px; }
 .breadcrumb { display:flex; align-items:center; gap:4px; flex-wrap:wrap; flex-shrink:0; }
-.crumb-home,.crumb-item { display:flex; align-items:center; gap:5px; background:none; border:none; color:var(--blue-600); font-size:14px; font-weight:500; font-family:inherit; cursor:pointer; padding:4px 8px; border-radius:6px; transition:var(--transition); }
-.crumb-home svg { width:15px; height:15px; }
+.crumb-home,.crumb-item { display:flex; align-items:center; gap:5px; background:none; border:none; color:var(--blue-600); font-size:16px; font-weight:500; font-family:inherit; cursor:pointer; padding:4px 8px; border-radius:6px; transition:var(--transition); }
+.crumb-home svg { width:17px; height:17px; }
 .crumb-home:hover,.crumb-item:hover { background:var(--blue-50); }
-.crumb-sep { color:var(--gray-300); font-size:14px; }
+.crumb-sep { color:var(--gray-300); font-size:16px; }
 .header-actions { display:flex; align-items:center; gap:6px; flex-wrap:wrap; flex-shrink:0; }
 .header-divider { width:1px; height:22px; background:var(--gray-200); margin:0 2px; flex-shrink:0; }
 .btn-select { display:flex; align-items:center; gap:5px; padding:7px 13px; border:1.5px solid var(--gray-200); border-radius:var(--radius-sm); background:white; font-size:13px; font-weight:500; font-family:inherit; color:var(--gray-600); cursor:pointer; transition:var(--transition); }
