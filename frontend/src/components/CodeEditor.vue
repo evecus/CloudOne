@@ -111,7 +111,7 @@ function getLangExtension(filename) {
 // ── 主题：亮色，风格和项目 UI 统一 ─────────────────────
 const lightTheme = EditorView.theme({
   '&': {
-    fontSize: '13px',
+    fontSize: '15px',
     fontFamily: "'JetBrains Mono', 'Courier New', monospace",
     background: '#FFFFFF',
     color: '#1E293B',
@@ -137,9 +137,9 @@ const lightTheme = EditorView.theme({
   },
   '.cm-lineNumbers .cm-gutterElement': {
     padding: '0 10px 0 6px',
-    minWidth: '32px',
+    minWidth: '40px',
     textAlign: 'right',
-    fontSize: '12px',
+    fontSize: '13px',
   },
   '.cm-activeLineGutter': { background: '#EFF6FF' },
   '.cm-activeLine': { background: '#F0F9FF' },
@@ -277,7 +277,7 @@ watch(() => props.filename, (name) => {
 }
 /* 文字加粗，提高可读性 */
 .cm-editor-container :deep(.cm-content) {
-  font-weight: 500;
+  font-weight: 600;
   -webkit-font-smoothing: auto;
   font-smooth: auto;
   /* 确保桌面端鼠标可以正常选择文字 */
