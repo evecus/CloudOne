@@ -14,12 +14,11 @@ import (
 
 // dangerPrefixes 列出所有需要屏蔽的虚拟文件系统路径前缀。
 // 无论存储根是 / 还是其他路径，凡是绝对路径命中这些前缀的操作一律拒绝，
-// 防止扫描 /proc /sys /dev /run 导致内存暴涨或系统异常。
+// 防止扫描 /proc /sys /dev 导致内存暴涨或系统异常。
 var dangerPrefixes = []string{
 	"/proc",
 	"/sys",
 	"/dev",
-	"/run",
 }
 
 // isDangerPath 判断一个绝对路径是否落在危险虚拟文件系统下。
