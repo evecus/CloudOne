@@ -143,6 +143,23 @@
             </div>
           </div>
 
+          <!-- 显示隐藏文件 -->
+          <div class="sm-card">
+            <h4 class="sm-card-title">{{ lang === 'zh' ? '文件显示' : 'File Display' }}</h4>
+            <div class="sm-field">
+              <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer">
+                <span style="font-size:13px;font-weight:500;color:var(--gray-700)">
+                  {{ lang === 'zh' ? '显示隐藏文件（以 . 开头）' : 'Show hidden files (dot files)' }}
+                </span>
+                <div class="toggle-wrap" @click="toggleShowHidden">
+                  <div class="toggle" :class="{ on: showHidden }">
+                    <div class="toggle-knob"></div>
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+
           <!-- 语言 -->
           <div class="sm-card">
             <h4 class="sm-card-title">{{ lang === 'zh' ? '语言 / Language' : 'Language / 语言' }}</h4>
@@ -218,6 +235,17 @@ function getFontFamily(id, type) {
   return list.find(f => f.id === id)?.family || ''
 }
 
+// 显示隐藏文件
+const showHidden = ref(localStorage.getItem('showHidden') === 'true')
+async function toggleShowHidden() {
+  showHidden.value = !showHidden.value
+  localStorage.setItem('showHidden', showHidden.value)
+  // 同步到服务端
+  try { await api.put('/settings', { show_hidden: showHidden.value }) } catch {}
+  // 触发全局事件，让 Files.vue 立即响应
+  window.dispatchEvent(new CustomEvent('show-hidden-changed', { detail: showHidden.value }))
+}
+
 function switchLang(l) {
   setLang(l)
 }
@@ -268,6 +296,10 @@ async function loadData() {
     pendingTheme.value = theme
     document.documentElement.setAttribute('data-theme', theme === 'blue' ? '' : theme)
     localStorage.setItem('theme', theme)
+
+    // 显示隐藏文件：优先服务端
+    showHidden.value = !!data.show_hidden
+    localStorage.setItem('showHidden', showHidden.value)
 
     // 字体：优先服务端，回退 localStorage
     const uiFont = data.ui_font || localStorage.getItem('uiFont') || 'sora'
