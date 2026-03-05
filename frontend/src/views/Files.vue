@@ -1608,7 +1608,7 @@ watch(() => _route.params.pathMatch, (val) => {
 .file-table { background:white; border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); overflow:hidden; border:1px solid var(--gray-100); }
 .file-header { display:grid; grid-template-columns:1fr 90px 160px 60px; padding:11px 20px; background:var(--gray-50); border-bottom:1px solid var(--gray-100); font-size:12px; font-weight:600; color:var(--gray-400); text-transform:uppercase; letter-spacing:.5px; align-items:center; }
 .file-header.has-check { grid-template-columns:44px 1fr 90px 160px 60px; cursor:pointer; }
-.file-row { display:grid; grid-template-columns:1fr 90px 160px 60px; padding:11px 20px; border-bottom:1px solid var(--gray-50); cursor:pointer; transition:var(--transition); align-items:center; }
+.file-row { display:grid; grid-template-columns:1fr 90px 160px 60px; padding:13px 20px; border-bottom:1px solid var(--gray-50); cursor:pointer; transition:var(--transition); align-items:center; }
 .file-row:last-child { border-bottom:none; }
 .file-row:hover { background:var(--blue-50); }
 .file-row.select-mode { grid-template-columns:44px 1fr 90px 160px 60px; }
@@ -1620,7 +1620,7 @@ watch(() => _route.params.pathMatch, (val) => {
 .checkmark.checked { background:var(--blue-600); border-color:var(--blue-600); }
 .checkmark.indeterminate { background:var(--blue-600); border-color:var(--blue-600); }
 .col-name { display:flex; align-items:center; gap:10px; min-width:0; }
-.file-icon { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.file-icon { width:36px; height:36px; border-radius:9px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .file-icon.folder-icon { background:rgba(251,191,36,.15); color:#F59E0B; }
 .file-icon.img { background:rgba(16,185,129,.12); color:#10B981; }
 .file-icon.video { background:rgba(139,92,246,.12); color:#8B5CF6; }
@@ -1629,8 +1629,8 @@ watch(() => _route.params.pathMatch, (val) => {
 .file-icon.pdf { background:rgba(239,68,68,.12); color:#EF4444; }
 .file-icon.code,.file-icon.text { background:rgba(59,130,246,.12); color:#3B82F6; }
 .file-icon.default { background:var(--gray-100); color:var(--gray-400); }
-.file-icon svg { width:16px; height:16px; }
-.file-name { font-size:14px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--gray-700); }
+.file-icon svg { width:18px; height:18px; }
+.file-name { font-size:15px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--gray-700); }
 .badge-public { padding:2px 8px; background:rgba(16,185,129,.12); color:#10B981; border-radius:20px; font-size:11px; font-weight:600; flex-shrink:0; }
 .file-row:hover .file-name { color:var(--blue-600); }
 .col-size,.col-date { font-size:13px; color:var(--gray-400); }
@@ -1711,7 +1711,7 @@ watch(() => _route.params.pathMatch, (val) => {
 .modal-bg { position:fixed; inset:0; background:rgba(15,23,42,.45); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; z-index:100; }
 .modal { background:white; border-radius:20px; padding:32px; width:440px; max-width:90vw; box-shadow:var(--shadow-lg); animation:modalIn .2s cubic-bezier(.4,0,.2,1); overflow:hidden; }
 .modal-lg { width:520px; }
-.modal-xl { width:760px; min-height:500px; max-height:90vh; display:flex; flex-direction:column; padding:0; background:#F8FAFC; }
+.modal-xl { width:900px; min-height:600px; max-height:92vh; display:flex; flex-direction:column; padding:0; background:#F8FAFC; }
 .modal-unsupported { width:440px; max-width:90vw; max-height:90vh; display:flex; flex-direction:column; padding:0; background:#F8FAFC; }
 .modal-xl .modal-titlebar, .modal-unsupported .modal-titlebar { padding:14px 20px 12px; border-bottom:1.5px solid var(--gray-200); margin-bottom:0; background:#F1F5F9; border-radius:20px 20px 0 0; }
 .modal-xl .field { padding:0; margin:0; background:#F8FAFC; flex:1; display:flex; flex-direction:column; }
@@ -1739,7 +1739,7 @@ watch(() => _route.params.pathMatch, (val) => {
 .field label { display:block; font-size:13px; font-weight:500; color:var(--gray-600); margin-bottom:8px; }
 .field input,.field textarea:not(.code-editor) { width:100%; padding:10px 14px; border:1.5px solid var(--gray-200); border-radius:var(--radius-sm); font-size:14px; font-family:inherit; color:var(--gray-800); outline:none; resize:vertical; transition:var(--transition); box-sizing:border-box; }
 .field input:focus,.field textarea:not(.code-editor):focus { border-color:var(--blue-500); box-shadow:0 0 0 3px rgba(59,130,246,.1); }
-.edit-field-wrap { padding:8px; flex:1; display:flex; flex-direction:column; background:#F1F5F9; overflow:hidden; min-height:380px; height:0; }
+.edit-field-wrap { padding:8px; flex:1; display:flex; flex-direction:column; background:#F1F5F9; overflow:hidden; min-height:480px; height:0; }
 /* .code-editor 已由 CodeEditor.vue 组件接管，此处仅保留占位 */
 .upload-area { border:2px dashed var(--gray-200); border-radius:var(--radius); padding:36px; text-align:center; cursor:pointer; transition:var(--transition); margin-bottom:14px; }
 .upload-area:hover { border-color:var(--blue-400); background:var(--blue-50); }
@@ -2012,10 +2012,10 @@ watch(() => _route.params.pathMatch, (val) => {
 
   /* 文件表格 */
   .file-header { grid-template-columns:1fr 70px 44px !important; padding:8px 12px; }
-  .file-row { grid-template-columns:1fr 70px 44px !important; padding:10px 12px; }
+  .file-row { grid-template-columns:1fr 70px 44px !important; padding:13px 14px; }
   .file-header > *:nth-child(3),
   .file-row > *:nth-child(3) { display:none; }
-  .file-name { font-size:13px; }
+  .file-name { font-size:15px; }
   .file-size { font-size:12px; }
   .row-actions .act-btn:not(.act-more) { display:none; }
   .row-actions { justify-content:flex-end; }
@@ -2047,8 +2047,8 @@ watch(() => _route.params.pathMatch, (val) => {
     border-radius: 0 !important;
     margin: 0 !important;
   }
-  .modal-unsupported { max-height:80vh !important; border-radius:20px 20px 0 0 !important; }
-  .edit-field-wrap { padding:6px; }
+  /* 移动端编辑框：去掉所有内边距，让编辑器占满全部空间 */
+  .edit-field-wrap { padding:0 !important; min-height:0 !important; }
   .modal .field input { font-size:16px; }
 
   /* 编辑弹窗标题栏：文件名截断，不换行，极紧凑 */
@@ -2092,8 +2092,8 @@ watch(() => _route.params.pathMatch, (val) => {
   /* 选择模式：checkbox + 名称 */
   .file-row.select-mode { grid-template-columns:44px 1fr !important; }
   .file-header.has-check { grid-template-columns:44px 1fr !important; }
-  .file-icon { width:28px; height:28px; border-radius:6px; }
-  .file-icon svg { width:13px; height:13px; }
+  .file-icon { width:32px; height:32px; border-radius:7px; }
+  .file-icon svg { width:15px; height:15px; }
   .mob-crumb-item { max-width:80px; }
   /* 极小屏隐藏预览行的 Scope 文字，只留路径 */
   .search-scope-preview > span:first-of-type { display:none; }
