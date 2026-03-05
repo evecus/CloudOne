@@ -872,7 +872,7 @@
 
 <script setup>
 import { ref, computed, onMounted, nextTick, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import Layout from '../components/Layout.vue'
 import SettingsModal from '../components/SettingsModal.vue'
 import CodeEditor from '../components/CodeEditor.vue'
@@ -883,10 +883,13 @@ import { t, currentLang as lang } from '../i18n'
 // ── 状态 ──────────────────────────────────────────
 const showSettings = ref(false)
 const _router = useRouter()
+const _route  = useRoute()
 const _auth = useAuthStore()
 function doLogout() { _auth.logout(); _router.push('/login') }
-function onStorageChanged() { currentPath.value = '/'; load() }
-const currentPath = ref('/')
+function onStorageChanged() { currentPath.value = '/'; _router.replace('/files'); load() }
+
+// 从 URL 路径初始化 currentPath，例如 /files/etc/systemd → /etc/systemd
+const currentPath = ref('/' + (Array.isArray(_route.params.pathMatch) ? _route.params.pathMatch.join('/') : (_route.params.pathMatch || '')))
 const files = ref([])
 const loading = ref(false)
 const dragging = ref(false)
@@ -1036,7 +1039,14 @@ async function load() {
   } catch {}
   loading.value = false
 }
-function navigate(path) { currentPath.value = path; if (selectMode.value) exitSelectMode(); load() }
+function navigate(path) {
+  currentPath.value = path
+  // 同步到地址栏：根目录 → /files，其他 → /files/etc/systemd
+  const urlPath = path === '/' ? '/files' : '/files' + path
+  _router.push(urlPath)
+  if (selectMode.value) exitSelectMode()
+  load()
+}
 function navigateToIndex(i) { navigate('/'+pathSegments.value.slice(0,i+1).join('/')) }
 
 // ── 选择模式 ──────────────────────────────────────
