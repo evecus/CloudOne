@@ -277,7 +277,7 @@ watch(() => props.filename, (name) => {
 }
 /* 文字加粗，提高可读性 */
 .cm-editor-container :deep(.cm-content) {
-  font-weight: 600;
+  font-weight: 500;
   -webkit-font-smoothing: auto;
   font-smooth: auto;
   /* 确保桌面端鼠标可以正常选择文字 */
