@@ -12,12 +12,25 @@ import (
 	"gorm.io/gorm"
 )
 
-// skipDirs 存储根为 / 时跳过的危险虚拟文件系统目录。
-var skipDirs = map[string]struct{}{
-	"/proc": {},
-	"/sys":  {},
-	"/dev":  {},
-	"/run":  {},
+// dangerPrefixes 列出所有需要屏蔽的虚拟文件系统路径前缀。
+// 无论存储根是 / 还是其他路径，凡是绝对路径命中这些前缀的操作一律拒绝，
+// 防止扫描 /proc /sys /dev /run 导致内存暴涨或系统异常。
+var dangerPrefixes = []string{
+	"/proc",
+	"/sys",
+	"/dev",
+	"/run",
+}
+
+// isDangerPath 判断一个绝对路径是否落在危险虚拟文件系统下。
+func isDangerPath(absPath string) bool {
+	clean := filepath.Clean(absPath)
+	for _, p := range dangerPrefixes {
+		if clean == p || strings.HasPrefix(clean, p+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 type FileInfo struct {
@@ -60,6 +73,19 @@ func (m *Manager) AbsPath(rel string) (string, error) {
 		if abs != rootClean && !strings.HasPrefix(abs, rootClean+string(os.PathSeparator)) {
 			return "", errors.New("invalid path: path traversal detected")
 		}
+	}
+	return abs, nil
+}
+
+// SafeAbsPath 在 AbsPath 基础上额外拒绝虚拟文件系统路径（/proc /sys /dev /run）。
+// 用于列目录、读写、删除等实际操作，防止扫描虚拟目录导致内存暴涨。
+func (m *Manager) SafeAbsPath(rel string) (string, error) {
+	abs, err := m.AbsPath(rel)
+	if err != nil {
+		return "", err
+	}
+	if isDangerPath(abs) {
+		return "", errors.New("access denied: virtual filesystem path")
 	}
 	return abs, nil
 }
@@ -110,7 +136,7 @@ func (m *Manager) markPublicRecursive(norm string) error {
 	if err := m.upsertVisibility(norm, true); err != nil {
 		return err
 	}
-	abs, err := m.AbsPath(norm)
+	abs, err := m.SafeAbsPath(norm)
 	if err != nil {
 		return nil
 	}
@@ -194,7 +220,7 @@ func (m *Manager) copyVisibility(srcNorm, dstNorm string) {
 // ── 文件操作 ──────────────────────────────────────────────────────────────────
 
 func (m *Manager) ListDir(rel string) ([]FileInfo, error) {
-	abs, err := m.AbsPath(rel)
+	abs, err := m.SafeAbsPath(rel)
 	if err != nil {
 		return nil, err
 	}
@@ -220,20 +246,33 @@ func (m *Manager) ListDir(rel string) ([]FileInfo, error) {
 
 	result := make([]FileInfo, 0, len(entries))
 	for _, e := range entries {
-		if e.IsDir() {
-			if _, skip := skipDirs["/"+e.Name()]; skip && abs == "/" {
-				continue
-			}
-		}
-		info, _ := e.Info()
+		childAbs := filepath.Join(abs, e.Name())
 		childRel := normalizePath(norm + "/" + e.Name())
+
+		// 用 os.Stat 跟随符号链接，获取真实文件信息
+		realInfo, statErr := os.Stat(childAbs)
+
+		isDir := e.IsDir()
+		if statErr == nil {
+			isDir = realInfo.IsDir()
+		}
+
+		// 屏蔽危险虚拟文件系统路径（/proc /sys /dev /run 及其子目录）
+		if isDangerPath(childAbs) {
+			continue
+		}
+
 		fi := FileInfo{
 			Name:     e.Name(),
 			Path:     childRel,
-			IsDir:    e.IsDir(),
+			IsDir:    isDir,
 			IsPublic: visMap[childRel],
 		}
-		if info != nil {
+		if realInfo != nil {
+			fi.Size = realInfo.Size()
+			fi.ModTime = realInfo.ModTime()
+			fi.Mode = realInfo.Mode()
+		} else if info, _ := e.Info(); info != nil {
 			fi.Size = info.Size()
 			fi.ModTime = info.ModTime()
 			fi.Mode = info.Mode()
@@ -244,7 +283,7 @@ func (m *Manager) ListDir(rel string) ([]FileInfo, error) {
 }
 
 func (m *Manager) MkDir(rel string) error {
-	abs, err := m.AbsPath(rel)
+	abs, err := m.SafeAbsPath(rel)
 	if err != nil {
 		return err
 	}
@@ -256,7 +295,7 @@ func (m *Manager) Delete(rel string) error {
 	if rel == "" || rel == "/" {
 		return errors.New("cannot delete root directory")
 	}
-	abs, err := m.AbsPath(rel)
+	abs, err := m.SafeAbsPath(rel)
 	if err != nil {
 		return err
 	}
@@ -269,11 +308,11 @@ func (m *Manager) Delete(rel string) error {
 
 // Move 移动文件/目录，可见性记录随之迁移。
 func (m *Manager) Move(src, dst string) error {
-	srcAbs, err := m.AbsPath(src)
+	srcAbs, err := m.SafeAbsPath(src)
 	if err != nil {
 		return err
 	}
-	dstAbs, err := m.AbsPath(dst)
+	dstAbs, err := m.SafeAbsPath(dst)
 	if err != nil {
 		return err
 	}
@@ -286,11 +325,11 @@ func (m *Manager) Move(src, dst string) error {
 
 // Copy 复制文件/目录，可见性记录随之复制。
 func (m *Manager) Copy(src, dst string) error {
-	srcAbs, err := m.AbsPath(src)
+	srcAbs, err := m.SafeAbsPath(src)
 	if err != nil {
 		return err
 	}
-	dstAbs, err := m.AbsPath(dst)
+	dstAbs, err := m.SafeAbsPath(dst)
 	if err != nil {
 		return err
 	}
@@ -312,7 +351,7 @@ func (m *Manager) Copy(src, dst string) error {
 }
 
 func (m *Manager) Write(rel string, r io.Reader) error {
-	abs, err := m.AbsPath(rel)
+	abs, err := m.SafeAbsPath(rel)
 	if err != nil {
 		return err
 	}
@@ -331,7 +370,7 @@ func (m *Manager) Write(rel string, r io.Reader) error {
 // ReadContent 读取文件内容，最多 2MB。
 // 使用 io.LimitReader + io.ReadAll，避免单次 Read 不保证读满的问题。
 func (m *Manager) ReadContent(rel string) (string, error) {
-	abs, err := m.AbsPath(rel)
+	abs, err := m.SafeAbsPath(rel)
 	if err != nil {
 		return "", err
 	}
@@ -349,7 +388,7 @@ func (m *Manager) ReadContent(rel string) (string, error) {
 }
 
 func (m *Manager) GetPermission(rel string) (os.FileMode, error) {
-	abs, err := m.AbsPath(rel)
+	abs, err := m.SafeAbsPath(rel)
 	if err != nil {
 		return 0, err
 	}
@@ -361,7 +400,7 @@ func (m *Manager) GetPermission(rel string) (os.FileMode, error) {
 }
 
 func (m *Manager) Chmod(rel string, mode os.FileMode) error {
-	abs, err := m.AbsPath(rel)
+	abs, err := m.SafeAbsPath(rel)
 	if err != nil {
 		return err
 	}
@@ -369,7 +408,7 @@ func (m *Manager) Chmod(rel string, mode os.FileMode) error {
 }
 
 func (m *Manager) Open(rel string) (*os.File, error) {
-	abs, err := m.AbsPath(rel)
+	abs, err := m.SafeAbsPath(rel)
 	if err != nil {
 		return nil, err
 	}
@@ -426,7 +465,7 @@ func (m *Manager) GetAllPublicFlat() ([]FileInfo, error) {
 		}
 
 		// 4. 从文件系统获取该条目的实际信息
-		abs, err := m.AbsPath(r.FilePath)
+		abs, err := m.SafeAbsPath(r.FilePath)
 		if err != nil {
 			continue
 		}
@@ -461,7 +500,7 @@ const searchMaxResults = 200
 // SearchFiles 在指定目录（含子目录）中按文件名模糊搜索（大小写不敏感，包含匹配）。
 // 结果上限 200 条，超过后停止遍历。
 func (m *Manager) SearchFiles(dir, keyword string) ([]SearchResult, error) {
-	absDir, err := m.AbsPath(dir)
+	absDir, err := m.SafeAbsPath(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -472,6 +511,10 @@ func (m *Manager) SearchFiles(dir, keyword string) ([]SearchResult, error) {
 	err = filepath.WalkDir(absDir, func(p string, d os.DirEntry, werr error) error {
 		if werr != nil {
 			return nil // 跳过无权限目录
+		}
+		// 跳过虚拟文件系统目录，防止内存暴涨
+		if d.IsDir() && isDangerPath(p) {
+			return filepath.SkipDir
 		}
 		if p == absDir {
 			return nil
