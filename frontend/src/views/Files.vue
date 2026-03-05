@@ -871,7 +871,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick, onUnmounted } from 'vue'
+import { ref, computed, onMounted, nextTick, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import Layout from '../components/Layout.vue'
 import SettingsModal from '../components/SettingsModal.vue'
@@ -1535,6 +1535,16 @@ function showToast(msg) {
 }
 onMounted(() => { load(); loadWebDAVStatus(); document.addEventListener('keydown', onKeydown) })
 onUnmounted(() => { document.removeEventListener('keydown', onKeydown) })
+
+// 监听浏览器前进/后退：URL 变化时同步 currentPath 并重新加载
+watch(() => _route.params.pathMatch, (val) => {
+  const path = '/' + (Array.isArray(val) ? val.join('/') : (val || ''))
+  if (path !== currentPath.value) {
+    currentPath.value = path
+    if (selectMode.value) exitSelectMode()
+    load()
+  }
+})
 </script>
 
 <style scoped>
