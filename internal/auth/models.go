@@ -27,6 +27,7 @@ type Settings struct {
 	WebDAVSubPath   string `json:"webdav_sub_path"`
 	WebDAVUsername  string `json:"webdav_username"`
 	WebDAVPassword  string `json:"webdav_password"`
+	ShowHidden      bool   `json:"show_hidden"`
 }
 
 type ShareLink struct {
