@@ -1028,7 +1028,11 @@ async function load() {
   loading.value = true
   try {
     const { data } = await api.get('/files', { params: { path: currentPath.value } })
-    files.value = data.files || []
+    const raw = data.files || []
+    files.value = [
+      ...raw.filter(f => f.is_dir).sort((a,b) => a.name.localeCompare(b.name)),
+      ...raw.filter(f => !f.is_dir).sort((a,b) => a.name.localeCompare(b.name)),
+    ]
   } catch {}
   loading.value = false
 }
@@ -1813,6 +1817,16 @@ onUnmounted(() => { document.removeEventListener('keydown', onKeydown) })
   /* 隐藏桌面端头部 */
   .page-header { display:none; }
 
+  /* 移动端隐藏权限列和日期列，只保留名称+大小 */
+  .file-header { grid-template-columns:1fr 64px !important; }
+  .file-row    { grid-template-columns:1fr 64px !important; }
+  .file-row.select-mode { grid-template-columns:44px 1fr !important; }
+  .file-header.has-check { grid-template-columns:44px 1fr !important; }
+  .col-date, .col-perm { display:none !important; }
+  /* 选择模式下 size 也隐藏，行只有 checkbox + 名称 */
+  .file-row.select-mode .col-size { display:none !important; }
+  .file-header.has-check .col-size { display:none !important; }
+
   /* 移动端顶部栏 */
   .mobile-header {
     display:flex;
@@ -2040,10 +2054,14 @@ onUnmounted(() => { document.removeEventListener('keydown', onKeydown) })
 }
 
 @media (max-width: 480px) {
-  .file-header { grid-template-columns:1fr 44px !important; }
-  .file-row { grid-template-columns:1fr 44px !important; }
-  .file-header > *:nth-child(2),
-  .file-row > *:nth-child(2) { display:none; }
+  /* 普通模式：只显示名称列 */
+  .file-header { grid-template-columns:1fr !important; }
+  .file-row { grid-template-columns:1fr !important; }
+  /* 隐藏 size、date、perm 列 */
+  .col-size, .col-date, .col-perm { display:none !important; }
+  /* 选择模式：checkbox + 名称 */
+  .file-row.select-mode { grid-template-columns:44px 1fr !important; }
+  .file-header.has-check { grid-template-columns:44px 1fr !important; }
   .file-icon { width:28px; height:28px; border-radius:6px; }
   .file-icon svg { width:13px; height:13px; }
   .mob-crumb-item { max-width:80px; }
