@@ -890,6 +890,7 @@ function onStorageChanged() { currentPath.value = '/'; _router.replace('/files')
 
 // 从 URL 路径初始化 currentPath，例如 /files/etc/systemd → /etc/systemd
 const currentPath = ref('/' + (Array.isArray(_route.params.pathMatch) ? _route.params.pathMatch.join('/') : (_route.params.pathMatch || '')))
+const showHidden = ref(localStorage.getItem('showHidden') === 'true')
 const files = ref([])
 const loading = ref(false)
 const dragging = ref(false)
@@ -1031,7 +1032,8 @@ async function load() {
   loading.value = true
   try {
     const { data } = await api.get('/files', { params: { path: currentPath.value } })
-    const raw = data.files || []
+    let raw = data.files || []
+    if (!showHidden.value) raw = raw.filter(f => !f.name.startsWith('.'))
     files.value = [
       ...raw.filter(f => f.is_dir).sort((a,b) => a.name.localeCompare(b.name)),
       ...raw.filter(f => !f.is_dir).sort((a,b) => a.name.localeCompare(b.name)),
@@ -1533,8 +1535,16 @@ function showToast(msg) {
   clearTimeout(toastTimer)
   toastTimer = setTimeout(() => { toastMsg.value = '' }, 2500)
 }
-onMounted(() => { load(); loadWebDAVStatus(); document.addEventListener('keydown', onKeydown) })
-onUnmounted(() => { document.removeEventListener('keydown', onKeydown) })
+function onShowHiddenChanged(e) { showHidden.value = e.detail; load() }
+onMounted(() => {
+  load(); loadWebDAVStatus()
+  document.addEventListener('keydown', onKeydown)
+  window.addEventListener('show-hidden-changed', onShowHiddenChanged)
+})
+onUnmounted(() => {
+  document.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('show-hidden-changed', onShowHiddenChanged)
+})
 
 // 监听浏览器前进/后退：URL 变化时同步 currentPath 并重新加载
 watch(() => _route.params.pathMatch, (val) => {
