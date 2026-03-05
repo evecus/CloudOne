@@ -206,6 +206,7 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 		UITheme    string `json:"ui_theme"`
 		UIFont     string `json:"ui_font"`
 		EditorFont string `json:"editor_font"`
+		ShowHidden *bool  `json:"show_hidden"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
@@ -230,6 +231,9 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 	}
 	if req.EditorFont != "" {
 		s.EditorFont = req.EditorFont
+	}
+	if req.ShowHidden != nil {
+		s.ShowHidden = *req.ShowHidden
 	}
 	h.db.Save(&s)
 	h.syncConf()
