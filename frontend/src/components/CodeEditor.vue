@@ -280,6 +280,9 @@ watch(() => props.filename, (name) => {
   font-weight: 500;
   -webkit-font-smoothing: auto;
   font-smooth: auto;
+  /* 确保桌面端鼠标可以正常选择文字 */
+  -webkit-user-select: text;
+  user-select: text;
 }
 /* 行号不加粗 */
 .cm-editor-container :deep(.cm-gutterElement) {
@@ -297,6 +300,13 @@ watch(() => props.filename, (name) => {
   .cm-editor-container :deep(.cm-content) {
     font-size: 14px;
     font-weight: 500;
+    /* 允许原生长按选择文本，方便复制 */
+    -webkit-user-select: text !important;
+    user-select: text !important;
+  }
+  /* 选中文字高亮保持可见 */
+  .cm-editor-container :deep(.cm-selectionBackground) {
+    background: #BFDBFE !important;
   }
   /* 移动端行号缩窄 */
   .cm-editor-container :deep(.cm-lineNumbers .cm-gutterElement) {
