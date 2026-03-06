@@ -250,7 +250,8 @@
               v-for="file in files"
               :key="file.path"
               class="file-row"
-              :class="{ selected: selected.includes(file.path), 'select-mode': selectMode }"
+              :data-name="file.name"
+              :class="{ selected: selected.includes(file.path), 'select-mode': selectMode, 'highlight-row': highlightName === file.name }"
               @click="handleRowClick(file)"
               @contextmenu.prevent="openCtxMenu($event, file)"
               @touchstart="onTouchStart($event, file)"
@@ -980,6 +981,7 @@ const compressing = ref(false)
 const fetchForm = ref({ url:'', filename:'' })
 const fetching = ref(false)
 const fetchError = ref('')
+const highlightName = ref('')
 
 const searchName = ref('')
 const searchDirInput = ref('')  // 用户输入的搜索目录（不含前导 /）
@@ -1162,12 +1164,12 @@ async function ctxAction(action) {
 function isArchive(name) {
   if (!name) return false
   const ext = name.toLowerCase()
-  return ext.endsWith('.zip') || ext.endsWith('.tar.gz') || ext.endsWith('.tar') || ext.endsWith('.gz') || ext.endsWith('.rar') || ext.endsWith('.7z')
+  return ext.endsWith('.zip') || ext.endsWith('.tar.gz') || ext.endsWith('.tar') || ext.endsWith('.gz')
 }
 
 async function doExtract(file) {
   try {
-    await api.post('/files/extract', { path: file.path, dir: currentPath.value })
+    await api.post('/files/decompress', { path: file.path, dir: currentPath.value })
     load()
   } catch(e) {
     alert(e.response?.data?.error || (lang.value==='zh'?'解压失败':'Extract failed'))
@@ -1258,11 +1260,19 @@ async function doSearch() {
   showSearchResult.value = true
   searching.value = false
 }
-function jumpToSearchResult() {
+async function jumpToSearchResult() {
   if (!searchSelected.value) return
   const r = searchSelected.value
+  const targetName = r.name || r.path.substring(r.path.lastIndexOf('/') + 1)
   navigate(r.is_dir ? r.path : (r.path.substring(0, r.path.lastIndexOf('/')) || '/'))
   showSearchResult.value = false; searchSelected.value = null
+  // 等待文件列表渲染完成后滚动高亮
+  highlightName.value = targetName
+  await nextTick()
+  await new Promise(resolve => setTimeout(resolve, 120))
+  const el = document.querySelector(`.file-row[data-name="${CSS.escape(targetName)}"]`)
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  setTimeout(() => { highlightName.value = '' }, 1000)
 }
 
 // ── 远程获取 ──────────────────────────────────────
@@ -1614,6 +1624,7 @@ watch(() => _route.params.pathMatch, (val) => {
 .file-row.select-mode { grid-template-columns:44px 1fr 90px 160px 60px; }
 .file-row.selected { background:rgba(37,99,235,.06); }
 .file-row.selected:hover { background:rgba(37,99,235,.1); }
+.file-row.highlight-row { background: var(--blue-50); transition: background 0.5s; }
 .col-check { width:44px; display:flex; align-items:center; justify-content:center; flex-shrink:0; cursor:pointer; }
 .checkmark { width:18px; height:18px; border:2px solid var(--gray-300); border-radius:5px; background:white; display:flex; align-items:center; justify-content:center; transition:all .15s; flex-shrink:0; user-select:none; }
 .checkmark:hover { border-color:var(--blue-400); }
