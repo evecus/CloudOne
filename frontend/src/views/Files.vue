@@ -33,7 +33,7 @@
             {{ t.uploadFolder }}
           </button>
           <input ref="folderInput" type="file" webkitdirectory multiple @change="confirmFolderUpload" style="display:none" />
-          <button class="btn-action" @click="showUpload = true">
+          <button class="btn-action" @click="showUpload = true; stagedFiles=[]; uploadDone=false; uploadProgress=[]">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             {{ t.upload }}
           </button>
@@ -172,7 +172,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><polyline points="12 11 12 17"/><polyline points="9 14 12 11 15 14"/></svg>
               {{ t.uploadFolder }}
             </button>
-            <button class="mob-act-item" @click="showUpload=true;showMobileActions=false">
+            <button class="mob-act-item" @click="showUpload=true;stagedFiles=[];uploadDone=false;uploadProgress=[];showMobileActions=false">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               {{ t.upload }}
             </button>
@@ -341,7 +341,7 @@
       <!-- ===== 所有弹窗 ===== -->
 
       <!-- 上传文件：选好后手动确认 -->
-      <div v-if="showUpload" class="modal-bg" @click.self="showUpload=false">
+      <div v-if="showUpload" class="modal-bg" @click.self="showUpload=false;stagedFiles=[];uploadDone=false;uploadProgress=[]">
         <div class="modal">
           <h3>{{ t.upload }}</h3>
           <div class="upload-area" @click="$refs.fileInput.click()" @dragover.prevent @drop.prevent="dropUploadStage">
@@ -1606,9 +1606,9 @@ watch(() => _route.params.pathMatch, (val) => {
 .spinner-sm { width:18px; height:18px; border:2px solid var(--gray-200); border-top-color:var(--blue-500); border-radius:50%; animation:spin .8s linear infinite; }
 @keyframes spin { to{transform:rotate(360deg)} }
 .file-table { background:white; border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); overflow:hidden; border:1px solid var(--gray-100); }
-.file-header { display:grid; grid-template-columns:1fr 90px 160px 60px; padding:11px 20px; background:var(--gray-50); border-bottom:1px solid var(--gray-100); font-size:12px; font-weight:600; color:var(--gray-400); text-transform:uppercase; letter-spacing:.5px; align-items:center; }
+.file-header { display:grid; grid-template-columns:1fr 90px 160px 60px; padding:11px 28px; background:var(--gray-50); border-bottom:1px solid var(--gray-100); font-size:12px; font-weight:600; color:var(--gray-400); text-transform:uppercase; letter-spacing:.5px; align-items:center; }
 .file-header.has-check { grid-template-columns:44px 1fr 90px 160px 60px; cursor:pointer; }
-.file-row { display:grid; grid-template-columns:1fr 90px 160px 60px; padding:13px 20px; border-bottom:1px solid var(--gray-50); cursor:pointer; transition:var(--transition); align-items:center; }
+.file-row { display:grid; grid-template-columns:1fr 90px 160px 60px; padding:13px 28px; border-bottom:1px solid var(--gray-50); cursor:pointer; transition:var(--transition); align-items:center; }
 .file-row:last-child { border-bottom:none; }
 .file-row:hover { background:var(--blue-50); }
 .file-row.select-mode { grid-template-columns:44px 1fr 90px 160px 60px; }
@@ -1619,7 +1619,7 @@ watch(() => _route.params.pathMatch, (val) => {
 .checkmark:hover { border-color:var(--blue-400); }
 .checkmark.checked { background:var(--blue-600); border-color:var(--blue-600); }
 .checkmark.indeterminate { background:var(--blue-600); border-color:var(--blue-600); }
-.col-name { display:flex; align-items:center; gap:10px; min-width:0; }
+.col-name { display:flex; align-items:center; gap:16px; min-width:0; }
 .file-icon { width:36px; height:36px; border-radius:9px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .file-icon.folder-icon { background:rgba(251,191,36,.15); color:#F59E0B; }
 .file-icon.img { background:rgba(16,185,129,.12); color:#10B981; }
