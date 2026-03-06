@@ -7,7 +7,7 @@
 
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount, shallowRef } from 'vue'
-import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightSpecialChars, drawSelection, dropCursor, rectangularSelection, crosshairCursor, highlightActiveLine } from '@codemirror/view'
+import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightSpecialChars, drawSelection, dropCursor, highlightActiveLine } from '@codemirror/view'
 import { EditorState, Compartment } from '@codemirror/state'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, foldGutter, indentOnInput } from '@codemirror/language'
@@ -134,6 +134,8 @@ const lightTheme = EditorView.theme({
     border: 'none',
     borderRight: '1px solid #E2E8F0',
     minWidth: '44px',
+    height: '100%',
+    minHeight: '100%',
   },
   '.cm-lineNumbers .cm-gutterElement': {
     padding: '0 10px 0 6px',
@@ -168,8 +170,7 @@ onMounted(() => {
       indentOnInput(),
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
       bracketMatching(),
-      rectangularSelection(),
-      crosshairCursor(),
+
       highlightActiveLine(),
       keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
       lightTheme,
