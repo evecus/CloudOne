@@ -32,6 +32,11 @@
           </div>
         </div>
 
+        <!-- Token 过期提示 -->
+        <div v-if="auth.isTokenExpiringSoon" class="expiry-banner">
+          <span>⚠️ {{ lang === 'zh' ? '登录状态将在 1 小时内过期，建议重新登录。' : 'Your session expires in less than 1 hour. Consider re-logging in.' }}</span>
+        </div>
+
         <!-- Profile -->
         <div class="settings-card">
           <h4 class="card-title">{{ t.profile }}</h4>
@@ -41,14 +46,23 @@
               <input v-model="userForm.username" type="text" />
             </div>
             <div class="field">
-              <label>{{ t.email }}</label>
-              <input v-model="userForm.email" type="email" />
+              <label>{{ t.password }}</label>
+              <input
+                v-model="userForm.password"
+                type="password"
+                :placeholder="lang === 'zh' ? '留空则不修改' : 'Leave blank to keep'"
+              />
             </div>
             <div class="field">
-              <label>{{ t.password }}</label>
-              <input v-model="userForm.password" type="password" :placeholder="lang === 'zh' ? '留空则不修改' : 'Leave blank to keep'" />
+              <label>{{ lang === 'zh' ? '确认新密码' : 'Confirm new password' }}</label>
+              <input
+                v-model="userForm.passwordConfirm"
+                type="password"
+                :placeholder="lang === 'zh' ? '再次输入新密码' : 'Re-enter new password'"
+              />
             </div>
           </div>
+          <p v-if="userError" class="field-error">{{ userError }}</p>
           <button class="btn-save" @click="saveUser">
             <span v-if="!savedUser">{{ t.save }}</span>
             <span v-else>✓ {{ t.saved }}</span>
@@ -71,7 +85,6 @@
         <div class="settings-card">
           <h4 class="card-title">{{ t.webdavSettings }}</h4>
 
-          <!-- 开关 -->
           <div class="webdav-toggle-row">
             <div class="webdav-toggle-info">
               <span class="toggle-label">{{ t.webdavEnabled }}</span>
@@ -82,7 +95,6 @@
             </button>
           </div>
 
-          <!-- 详细配置（启用时显示） -->
           <div v-if="webdavForm.enabled" class="webdav-fields">
             <div class="field">
               <label>{{ t.webdavSubPath }}</label>
@@ -92,9 +104,19 @@
             <div class="field">
               <label>{{ t.webdavPassword }}</label>
               <p class="field-desc">{{ t.webdavPasswordDesc }}</p>
-              <input v-model="webdavForm.password" type="password" :placeholder="t.webdavPasswordPlaceholder" autocomplete="new-password" />
+              <!-- 密码字段永远不回显，始终为空，表示"不修改" -->
+              <input
+                v-model="webdavForm.password"
+                type="password"
+                :placeholder="webdavHasPassword
+                  ? (lang === 'zh' ? '留空则保持原密码不变' : 'Leave blank to keep current password')
+                  : (lang === 'zh' ? '设置 WebDAV 密码' : 'Set WebDAV password')"
+                autocomplete="new-password"
+              />
+              <p v-if="webdavHasPassword" class="field-hint">
+                {{ lang === 'zh' ? '✓ 已设置密码（加密存储）' : '✓ Password is set (encrypted)' }}
+              </p>
             </div>
-            <!-- 连接地址预览 -->
             <div class="webdav-addr-preview">
               <span class="addr-label">{{ t.webdavAddress }}</span>
               <code class="addr-value">{{ davUrl }}</code>
@@ -139,13 +161,16 @@ import { t, currentLang as lang, setLang } from '../i18n'
 import { useAuthStore } from '../stores/auth'
 
 const auth = useAuthStore()
-const userForm = ref({ username: '', email: '', password: '' })
+const userForm = ref({ username: '', password: '', passwordConfirm: '' })
 const settingsForm = ref({ storageDir: '' })
 const savedUser = ref(false)
 const savedSettings = ref(false)
 const savedWebDAV = ref(false)
+const userError = ref('')
 const currentTheme = ref(localStorage.getItem('theme') || 'blue')
 
+// WebDAV：只记录是否有密码，不存储密码内容
+const webdavHasPassword = ref(false)
 const webdavForm = ref({ enabled: false, subPath: '', password: '' })
 const davUrl = computed(() => `${window.location.origin}/dav/`)
 
@@ -172,7 +197,6 @@ function switchLang(l) {
 async function load() {
   if (auth.user) {
     userForm.value.username = auth.user.username
-    userForm.value.email = auth.user.email
   }
   const { data } = await api.get('/settings')
   settingsForm.value.storageDir = data.storage_dir
@@ -181,29 +205,50 @@ async function load() {
   webdavForm.value = {
     enabled: wdata.webdav_enabled,
     subPath: wdata.webdav_sub_path,
-    password: wdata.webdav_password,
+    password: '', // 永不回显密码
   }
+  webdavHasPassword.value = wdata.webdav_has_password
 }
 
 async function saveWebDAV() {
   await api.put('/webdav/settings', {
     webdav_enabled: webdavForm.value.enabled,
     webdav_sub_path: webdavForm.value.subPath,
-    webdav_password: webdavForm.value.password,
+    webdav_password: webdavForm.value.password, // 空字符串=不修改
   })
+  webdavForm.value.password = '' // 保存后清空输入框
   savedWebDAV.value = true
+  // 重新加载，更新 has_password 状态
+  const { data: wdata } = await api.get('/webdav/settings')
+  webdavHasPassword.value = wdata.webdav_has_password
   setTimeout(() => savedWebDAV.value = false, 2000)
 }
 
 async function saveUser() {
-  const payload = {
-    username: userForm.value.username,
-    email: userForm.value.email,
+  userError.value = ''
+  // 如果填写了新密码，校验两次输入是否一致
+  if (userForm.value.password) {
+    if (userForm.value.password !== userForm.value.passwordConfirm) {
+      userError.value = lang.value === 'zh' ? '两次输入的密码不一致' : 'Passwords do not match'
+      return
+    }
+    if (userForm.value.password.length < 6) {
+      userError.value = lang.value === 'zh' ? '密码至少 6 位' : 'Password must be at least 6 characters'
+      return
+    }
   }
+
+  const payload = { username: userForm.value.username }
   if (userForm.value.password) payload.password = userForm.value.password
+
   const { data } = await api.put('/user', payload)
-  auth.user = data
+  auth.user = data.user
+  // 后端下发了新 token（密码已修改），前端更新存储
+  if (data.token) {
+    auth.updateToken(data.token)
+  }
   userForm.value.password = ''
+  userForm.value.passwordConfirm = ''
   savedUser.value = true
   setTimeout(() => savedUser.value = false, 2000)
 }
@@ -226,6 +271,17 @@ onMounted(load)
 .lang-mini { display: flex; border: 1px solid var(--gray-200); border-radius: 8px; overflow: hidden; }
 .lang-mini button { padding: 6px 12px; border: none; background: transparent; font-size: 12px; font-family: inherit; cursor: pointer; color: var(--gray-500); transition: var(--transition); }
 .lang-mini button.active { background: var(--blue-600); color: white; }
+
+/* 过期提示横幅 */
+.expiry-banner {
+  background: #FEF3C7;
+  border: 1px solid #F59E0B;
+  border-radius: var(--radius-sm);
+  padding: 10px 16px;
+  margin-bottom: 20px;
+  font-size: 13px;
+  color: #92400E;
+}
 
 .settings-logo {
   display: flex;
@@ -260,6 +316,9 @@ onMounted(load)
 .field input { width: 100%; padding: 10px 14px; border: 1.5px solid var(--gray-200); border-radius: var(--radius-sm); font-size: 14px; font-family: inherit; color: var(--gray-800); outline: none; transition: var(--transition); }
 .field input:focus { border-color: var(--blue-500); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
 
+.field-error { color: #EF4444; font-size: 12px; margin-top: 8px; }
+.field-hint { color: #16A34A; font-size: 12px; margin-top: 6px; }
+
 .btn-save {
   margin-top: 20px;
   padding: 10px 24px;
@@ -274,7 +333,6 @@ onMounted(load)
   transition: var(--transition);
   box-shadow: var(--primary-shadow);
 }
-
 .btn-save:hover { transform: translateY(-1px); box-shadow: var(--primary-shadow-hover); }
 
 .card-desc { font-size: 13px; color: var(--gray-400); margin-bottom: 16px; margin-top: -12px; }
@@ -284,84 +342,28 @@ onMounted(load)
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 10px;
 }
-
 .theme-swatch {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border: 1.5px solid var(--gray-200);
-  border-radius: var(--radius-sm);
-  background: white;
-  cursor: pointer;
-  transition: var(--transition);
-  font-family: inherit;
-  position: relative;
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+  border: 1.5px solid var(--gray-200); border-radius: var(--radius-sm);
+  background: white; cursor: pointer; transition: var(--transition); font-family: inherit; position: relative;
 }
+.theme-swatch:hover { border-color: var(--blue-400); background: var(--blue-50); }
+.theme-swatch.active { border-color: var(--blue-500); background: var(--blue-50); box-shadow: 0 0 0 3px var(--blue-100); }
+.swatch-preview { width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+.swatch-name { font-size: 13px; font-weight: 500; color: var(--gray-700); flex: 1; }
+.swatch-check { font-size: 12px; font-weight: 700; color: var(--blue-600); }
 
-.theme-swatch:hover {
-  border-color: var(--blue-400);
-  background: var(--blue-50);
-}
-
-.theme-swatch.active {
-  border-color: var(--blue-500);
-  background: var(--blue-50);
-  box-shadow: 0 0 0 3px var(--blue-100);
-}
-
-.swatch-preview {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-}
-
-.swatch-name {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--gray-700);
-  flex: 1;
-}
-
-.swatch-check {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--blue-600);
-}
-
-/* WebDAV 开关行 */
-.webdav-toggle-row {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 16px; margin-bottom: 16px; flex-wrap: wrap;
-}
+.webdav-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
 .webdav-toggle-info { flex: 1; min-width: 0; }
 .toggle-label { font-size: 14px; font-weight: 600; color: var(--gray-700); display: block; }
-.toggle-desc  { font-size: 12px; color: var(--gray-400); margin-top: 3px; display: block; }
-
-.toggle-btn {
-  width: 44px; height: 24px; border-radius: 12px;
-  background: var(--gray-200); border: none; cursor: pointer;
-  position: relative; transition: background 0.2s; flex-shrink: 0;
-}
+.toggle-desc { font-size: 12px; color: var(--gray-400); margin-top: 3px; display: block; }
+.toggle-btn { width: 44px; height: 24px; border-radius: 12px; background: var(--gray-200); border: none; cursor: pointer; position: relative; transition: background 0.2s; flex-shrink: 0; }
 .toggle-btn.on { background: var(--blue-500); }
-.toggle-knob {
-  position: absolute; top: 3px; left: 3px;
-  width: 18px; height: 18px; border-radius: 50%;
-  background: white; transition: transform 0.2s;
-  box-shadow: 0 1px 4px rgba(0,0,0,.2);
-}
+.toggle-knob { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: white; transition: transform 0.2s; box-shadow: 0 1px 4px rgba(0,0,0,.2); }
 .toggle-btn.on .toggle-knob { transform: translateX(20px); }
-
 .webdav-fields { display: flex; flex-direction: column; gap: 16px; margin-bottom: 4px; }
 .field-desc { font-size: 12px; color: var(--gray-400); margin: -4px 0 8px; }
-
-.webdav-addr-preview {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  padding: 10px 14px; background: var(--blue-50);
-  border: 1px solid var(--blue-100); border-radius: var(--radius-sm);
-}
+.webdav-addr-preview { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: var(--blue-50); border: 1px solid var(--blue-100); border-radius: var(--radius-sm); }
 .addr-label { font-size: 12px; font-weight: 600; color: var(--gray-500); flex-shrink: 0; }
 .addr-value { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--blue-700); word-break: break-all; }
 
