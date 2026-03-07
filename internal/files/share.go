@@ -60,7 +60,23 @@ func (s *ShareManager) Delete(id uint, userID uint) error {
 	return s.db.Where("id = ? AND user_id = ?", id, userID).Delete(&auth.ShareLink{}).Error
 }
 
+// Peek 只读取分享链接（校验过期/次数），不递增访问计数，用于目录浏览
+func (s *ShareManager) Peek(code string) (*auth.ShareLink, error) {
+	var link auth.ShareLink
+	if err := s.db.Where("code = ?", code).First(&link).Error; err != nil {
+		return nil, err
+	}
+	if link.ExpiresAt != nil && time.Now().After(*link.ExpiresAt) {
+		return nil, fmt.Errorf("share link has expired")
+	}
+	if link.MaxViews > 0 && link.ViewCount >= link.MaxViews {
+		return nil, fmt.Errorf("share link has reached maximum views")
+	}
+	return &link, nil
+}
+
 // Get 获取分享链接，同时校验过期时间和访问次数，有效则递增计数
+// 仅在最终下载/文件访问时调用，不用于目录浏览翻页
 func (s *ShareManager) Get(code string) (*auth.ShareLink, error) {
 	var link auth.ShareLink
 	if err := s.db.Where("code = ?", code).First(&link).Error; err != nil {
