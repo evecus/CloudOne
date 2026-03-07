@@ -957,7 +957,8 @@ func (h *Handler) DeleteShare(c *gin.Context) {
 
 func (h *Handler) AccessShare(c *gin.Context) {
 	code := c.Param("code")
-	link, err := h.shares.Get(code)
+	// 目录浏览用 Peek，不递增 view_count；实际下载才用 Get 计数
+	link, err := h.shares.Peek(code)
 	if err != nil {
 		c.JSON(404, gin.H{"error": "not found"})
 		return
