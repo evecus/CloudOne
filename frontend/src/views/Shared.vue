@@ -79,6 +79,14 @@
             <div class="share-info">
               <p class="share-path">{{ s.file_path }}</p>
               <p class="share-date">{{ formatDate(s.created_at) }}</p>
+              <div class="share-meta">
+                <span v-if="s.expires_at" class="meta-tag" :class="isExpired(s) ? 'expired' : 'expiry'">
+                  {{ isExpired(s) ? '已过期' : '过期：' + formatDate(s.expires_at) }}
+                </span>
+                <span v-if="s.max_views > 0" class="meta-tag views">
+                  {{ s.view_count }}/{{ s.max_views }} 次
+                </span>
+              </div>
               <div class="share-links">
                 <a :href="`/s/${s.code}`" target="_blank" class="share-url">{{ origin }}/s/{{ s.code }}</a>
               </div>
@@ -166,6 +174,9 @@ function fallbackCopy(text) {
   el.value = text; el.style.cssText = 'position:fixed;top:-9999px;left:-9999px'
   document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el)
 }
+function isExpired(s) {
+  return s.expires_at && new Date(s.expires_at) < new Date()
+}
 function formatDate(d) {
   return new Date(d).toLocaleDateString(lang.value === 'zh' ? 'zh-CN' : 'en-US', { year:'numeric', month:'short', day:'numeric' })
 }
@@ -197,6 +208,11 @@ onMounted(load)
 .share-info { flex: 1; min-width: 0; }
 .share-path { font-size: 14px; font-weight: 600; color: var(--gray-700); margin-bottom: 4px; }
 .share-date { font-size: 12px; color: var(--gray-400); margin-bottom: 6px; }
+.share-meta { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.meta-tag { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; }
+.meta-tag.expiry { background: #EFF6FF; color: #2563EB; }
+.meta-tag.expired { background: #FEF2F2; color: #EF4444; }
+.meta-tag.views { background: #F0FDF4; color: #16A34A; }
 .share-url { font-size: 12px; font-family: 'JetBrains Mono', monospace; color: var(--blue-500); text-decoration: none; background: var(--blue-50); padding: 3px 8px; border-radius: 6px; }
 .share-actions { display: flex; gap: 4px; }
 .act-btn { width: 34px; height: 34px; border: none; background: var(--gray-50); border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--gray-400); transition: var(--transition); }
