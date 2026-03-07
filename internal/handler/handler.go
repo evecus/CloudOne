@@ -730,7 +730,7 @@ func (h *Handler) BatchDownload(c *gin.Context) {
 	zw := zip.NewWriter(c.Writer)
 	defer zw.Close()
 	for _, rel := range req.Paths {
-		abs, err := h.files.AbsPath(rel)
+		abs, err := h.files.SafeAbsPath(rel)
 		if err != nil {
 			continue
 		}
@@ -814,12 +814,23 @@ func (h *Handler) BatchCopy(c *gin.Context) {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-	var failed []string
+	targetNorm := filepath.Clean("/" + strings.TrimLeft(req.Target, "/"))
+	var failed, blocked []string
 	for _, src := range req.Paths {
-		dst := req.Target + "/" + filepath.Base(src)
+		srcNorm := filepath.Clean("/" + strings.TrimLeft(src, "/"))
+		// 防止复制到自身或子目录（会导致无限递归）
+		if srcNorm == targetNorm || strings.HasPrefix(targetNorm+"/", srcNorm+"/") {
+			blocked = append(blocked, src)
+			continue
+		}
+		dst := targetNorm + "/" + filepath.Base(srcNorm)
 		if err := h.files.Copy(src, dst); err != nil {
 			failed = append(failed, src)
 		}
+	}
+	if len(blocked) > 0 {
+		c.JSON(400, gin.H{"error": "cannot copy a folder into itself or its subdirectory", "blocked": blocked})
+		return
 	}
 	if len(failed) > 0 {
 		c.JSON(207, gin.H{"ok": false, "failed": failed})
