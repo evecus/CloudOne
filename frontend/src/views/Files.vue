@@ -1364,19 +1364,12 @@ function downloadFile(file) {
     .then(r=>r.blob()).then(blob=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=file.name;a.click();URL.revokeObjectURL(a.href)})
 }
 
-const TEXT_EXTS  = new Set(['txt','md','markdown','log','ini','conf','cfg','env','yaml','yml','toml','json','jsonc','json5','html','htm','xml','svg','css','scss','sass','less','js','mjs','cjs','ts','tsx','jsx','vue','py','go','java','rs','c','cpp','cc','h','hpp','sh','bash','zsh','fish','ps1','bat','cmd','rb','php','pl','lua','r','swift','kt','cs','vb','sql','graphql','proto','dockerfile','makefile','csv','tsv','tex','rst','adoc','version','service'])
+const TEXT_EXTS  = new Set(['txt','md','markdown','dockerfile','makefile','log','service','timer','mount','target','ini','asc','keys','readme','man','networks','hosts','hostname','fstab','group','timezone','crontab','conf','cfg','env','yaml','yml','toml','json','jsonc','json5','html','htm','xml','svg','css','scss','sass','less','js','mjs','cjs','ts','tsx','jsx','vue','svelte','astro','py','go','java','rs','c','cpp','cc','h','hpp','sh','mod','bash','zsh','fish','ps1','bat','cmd','rb','php','pl','lua','r','swift','kt','cs','vb','sql','graphql','proto','csv','tsv','tex','rst','adoc','dart','scala','clj','cljs','erl','hrl','ex','exs','sol','gd','glsl','hlsl','wgsl','properties','gradle','editorconfig','browserslistrc','lock','strings','plist','xcconfig','ejs','pug','jade','hbs','handlebars','twig','liquid','mjml','ipynb','bib','diff','patch','ignore','procfile','htpasswd','htaccess','inf','reg','awk','sls','tf','tfvars','j2','repo','rules','dts','dtsi','config','inc','po','pot','msg'])
 const IMAGE_EXTS = new Set(['jpg','jpeg','png','gif','webp','bmp','ico','tiff','tif','avif','svg'])
-function getFileViewMode(file) {
-  // 优先用后端返回的 mime_type
-  if (file.mime_type) {
-    if (file.mime_type.startsWith('image/')) return 'image'
-    if (file.mime_type.startsWith('text/')) return 'text'
-    return 'unsupported'
-  }
-  // 兜底：用文件名扩展名匹配
-  const filename = file.name
+function getFileViewMode(filename) {
   if (!filename) return 'unsupported'
   const lower = filename.toLowerCase()
+  // 无扩展名文件：直接用完整小写文件名匹配（Dockerfile、Makefile、.env 等）
   if (!filename.includes('.')) {
     return TEXT_EXTS.has(lower) ? 'text' : 'unsupported'
   }
@@ -1387,7 +1380,7 @@ function getFileViewMode(file) {
 }
 async function editFile(file) {
   editTarget.value=file; editContent.value=''; editError.value=''; previewUrl.value=''; forceTextMode.value=false
-  showEdit.value=true; const mode=getFileViewMode(file); fileViewMode.value=mode
+  showEdit.value=true; const mode=getFileViewMode(file.name); fileViewMode.value=mode
   if (mode==='image') {
     const token=localStorage.getItem('token')
     try {
