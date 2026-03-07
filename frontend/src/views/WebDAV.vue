@@ -87,7 +87,11 @@
             </div>
             <div class="info-row">
               <span class="info-label">{{ t.webdavPasswordLabel }}</span>
-              <span class="info-value info-tip">{{ t.webdavPasswordValue }}</span>
+              <span class="info-value info-tip" :class="settings.webdav_has_password ? 'tip-set' : ''">
+                {{ settings.webdav_has_password
+                  ? '✓ 已设置独立密码（加密存储）'
+                  : 'CloudOne 账户密码' }}
+              </span>
             </div>
           </div>
         </div>
@@ -171,7 +175,7 @@ import { t } from '../i18n'
 import { useAuthStore } from '../stores/auth'
 
 const auth = useAuthStore()
-const settings = ref({ webdav_enabled: false, webdav_sub_path: '', webdav_username: '', webdav_password: '' })
+const settings = ref({ webdav_enabled: false, webdav_sub_path: '', webdav_username: '', webdav_has_password: false })
 const files = ref([])
 const currentPath = ref('/')
 const loading = ref(false)
@@ -346,6 +350,7 @@ onMounted(loadSettings)
   padding: 3px 10px; border-radius: 6px; word-break: break-all;
 }
 .info-tip { font-family: inherit; font-size: 13px; color: var(--gray-500); background: var(--gray-50); }
+.tip-set { color: #16A34A; background: #F0FDF4; }
 
 .copy-btn {
   display: flex; align-items: center; gap: 5px;
