@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -40,6 +41,7 @@ type FileInfo struct {
 	ModTime  time.Time   `json:"mod_time"`
 	IsPublic bool        `json:"is_public"`
 	Mode     os.FileMode `json:"mode"`
+	MimeType string      `json:"mime_type"`
 }
 
 type Manager struct {
@@ -276,9 +278,22 @@ func (m *Manager) ListDir(rel string) ([]FileInfo, error) {
 			fi.ModTime = info.ModTime()
 			fi.Mode = info.Mode()
 		}
+		if !isDir {
+			if mime, err := detectMime(childAbs); err == nil {
+				fi.MimeType = mime
+			}
+		}
 		result = append(result, fi)
 	}
 	return result, nil
+}
+
+func detectMime(path string) (string, error) {
+	out, err := exec.Command("file", "--mime-type", "-b", path).Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 func (m *Manager) MkDir(rel string) error {
