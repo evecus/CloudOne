@@ -1364,7 +1364,7 @@ function downloadFile(file) {
     .then(r=>r.blob()).then(blob=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=file.name;a.click();URL.revokeObjectURL(a.href)})
 }
 
-const TEXT_EXTS  = new Set(['txt','md','markdown','log','ini','conf','cfg','env','yaml','yml','toml','json','jsonc','json5','html','htm','xml','svg','css','scss','sass','less','js','mjs','cjs','ts','tsx','jsx','vue','py','go','java','rs','c','cpp','cc','h','hpp','sh','bash','zsh','fish','ps1','bat','cmd','rb','php','pl','lua','r','swift','kt','cs','vb','sql','graphql','proto','dockerfile','makefile','csv','tsv','tex','rst','adoc','version','service'])
+const TEXT_EXTS  = new Set(['txt','md','markdown','log','ini','conf','cfg','env','yaml','yml','toml','json','jsonc','json5','html','htm','xml','svg','css','scss','sass','less','js','mjs','cjs','ts','tsx','jsx','vue','py','go','java','rs','c','cpp','cc','h','hpp','sh','bash','zsh','fish','ps1','bat','cmd','rb','php','pl','lua','r','swift','kt','cs','vb','sql','graphql','proto','dockerfile','makefile','csv','tsv','tex','rst','adoc'])
 const IMAGE_EXTS = new Set(['jpg','jpeg','png','gif','webp','bmp','ico','tiff','tif','avif','svg'])
 function getFileViewMode(filename) {
   if (!filename) return 'unsupported'
@@ -1413,8 +1413,14 @@ function closeEdit() {
     previewUrl.value = ''
   }
 }
-  try { await api.put('/files/content',{path:editTarget.value.path,content:editContent.value}); closeEdit(); load() }
-  catch(e) { editError.value=e.response?.data?.error||'Save failed' }
+async function doSaveFile() {
+  try {
+    await api.put('/files/content', {path: editTarget.value.path, content: editContent.value});
+    closeEdit();
+    load()
+  } catch(e) {
+    editError.value = e.response?.data?.error || 'Save failed'
+  }
 }
 async function openChmod(file) {
   chmodTarget.value=file; showChmod.value=true
