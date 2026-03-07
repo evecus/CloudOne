@@ -317,7 +317,10 @@ async function saveUser() {
   const payload = { username: userForm.value.username }
   if (userForm.value.password) payload.password = userForm.value.password
   const { data } = await api.put('/user', payload)
-  auth.user = data
+  auth.user = data.user  // 后端返回 { user, token? }，取 user 字段
+  if (data.token) {
+    auth.updateToken(data.token)  // 修改密码后更新 token，避免被踢出
+  }
   userForm.value.password = ''
   savedUser.value = true
   setTimeout(() => savedUser.value = false, 2000)
