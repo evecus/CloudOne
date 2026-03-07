@@ -354,7 +354,7 @@
             <div v-for="(f,i) in stagedFiles" :key="i" class="upload-item">
               <span>{{ f.name }}</span>
               <span v-if="uploadDone" class="done">✓</span>
-              <span v-else class="pending">{{ lang==='zh'?'待上传':'Pending' }}</span>
+              <span v-else class="pending">待上传</span>
             </div>
           </div>
           <div v-if="uploadProgress.length && !uploadDone" class="compress-progress">
@@ -441,7 +441,7 @@
       </div>
 
       <!-- 编辑/预览文件 -->
-      <div v-if="showEdit" class="modal-bg" @click.self="closeEdit()">
+      <div v-if="showEdit" class="modal-bg" @click.self="showEdit=false">
         <div class="modal" :class="(fileViewMode==='unsupported' && !forceTextMode) ? 'modal-unsupported' : 'modal-xl'" :key="forceTextMode ? 'editor' : fileViewMode">
           <div class="modal-titlebar">
             <h3>
@@ -449,7 +449,7 @@
               <span v-else>{{ t.editFileTitle }}</span>:
               <span class="edit-filename">{{ editTarget?.name }}</span>
             </h3>
-            <button class="icon-close" @click="closeEdit()">
+            <button class="icon-close" @click="showEdit=false">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </div>
@@ -1063,9 +1063,7 @@ async function load() {
       ...raw.filter(f => f.is_dir).sort((a,b) => a.name.localeCompare(b.name)),
       ...raw.filter(f => !f.is_dir).sort((a,b) => a.name.localeCompare(b.name)),
     ]
-  } catch(e) {
-    showToast(e.response?.data?.error || (lang.value === 'zh' ? '加载失败，请检查网络或路径' : 'Load failed, check network or path'))
-  }
+  } catch {}
   loading.value = false
 }
 function navigate(path) {
@@ -1203,14 +1201,7 @@ async function doExtract(file) {
 
 // ── 批量操作 ──────────────────────────────────────
 async function doBatchDelete() {
-  try {
-    const res = await api.post('/files/batch-delete', { paths: selected.value })
-    if (res.data?.failed?.length) {
-      showToast((lang.value === 'zh' ? `${res.data.failed.length} 个文件删除失败` : `${res.data.failed.length} file(s) failed to delete`))
-    }
-  } catch(e) {
-    showToast(e.response?.data?.error || (lang.value === 'zh' ? '批量删除失败' : 'Batch delete failed'))
-  }
+  try { await api.post('/files/batch-delete', { paths: selected.value }) } catch {}
   showBatchDelete.value = false; exitSelectMode(); load()
 }
 
@@ -1240,14 +1231,10 @@ async function loadDirTree(path) {
 async function confirmDirAction() {
   if (moveTargetConflict.value) return
   const paths = singleOpFile.value ? [singleOpFile.value.path] : selected.value
-  try {
-    if (dirModalMode.value === 'move') {
-      await api.post('/files/batch-move', { paths, target: moveTargetPath.value })
-    } else {
-      await api.post('/files/batch-copy', { paths, target: moveTargetPath.value })
-    }
-  } catch(e) {
-    showToast(e.response?.data?.error || (lang.value === 'zh' ? '操作失败' : 'Operation failed'))
+  if (dirModalMode.value === 'move') {
+    try { await api.post('/files/batch-move', { paths, target: moveTargetPath.value }) } catch {}
+  } else {
+    try { await api.post('/files/batch-copy', { paths, target: moveTargetPath.value }) } catch {}
   }
   showDirModal.value = false; singleOpFile.value = null; exitSelectMode(); load()
 }
@@ -1262,9 +1249,7 @@ async function doCompress() {
       output: compressForm.value.output || 'archive',
       dir: currentPath.value
     })
-  } catch(e) {
-    showToast(e.response?.data?.error || (lang.value === 'zh' ? '压缩失败' : 'Compress failed'))
-  }
+  } catch {}
   compressing.value = false
   showCompress.value = false
   compressForm.value = { format:'zip', output:'' }
@@ -1367,13 +1352,8 @@ function downloadFile(file) {
 const TEXT_EXTS  = new Set(['txt','md','markdown','log','ini','conf','cfg','env','yaml','yml','toml','json','jsonc','json5','html','htm','xml','svg','css','scss','sass','less','js','mjs','cjs','ts','tsx','jsx','vue','py','go','java','rs','c','cpp','cc','h','hpp','sh','bash','zsh','fish','ps1','bat','cmd','rb','php','pl','lua','r','swift','kt','cs','vb','sql','graphql','proto','dockerfile','makefile','csv','tsv','tex','rst','adoc'])
 const IMAGE_EXTS = new Set(['jpg','jpeg','png','gif','webp','bmp','ico','tiff','tif','avif','svg'])
 function getFileViewMode(filename) {
-  if (!filename) return 'unsupported'
-  const lower = filename.toLowerCase()
-  // 无扩展名文件：直接用完整小写文件名匹配（Dockerfile、Makefile、.env 等）
-  if (!filename.includes('.')) {
-    return TEXT_EXTS.has(lower) ? 'text' : 'unsupported'
-  }
-  const ext = lower.split('.').pop()
+  if (!filename||!filename.includes('.')) return 'unsupported'
+  const ext = filename.split('.').pop().toLowerCase()
   if (IMAGE_EXTS.has(ext)) return 'image'
   if (TEXT_EXTS.has(ext)) return 'text'
   return 'unsupported'
@@ -1406,14 +1386,8 @@ async function forceEditFile() {
     editError.value = e.response?.data?.error || (lang.value === 'zh' ? '无法读取文件内容' : 'Cannot read file content')
   }
 }
-function closeEdit() {
-  showEdit.value = false
-  if (previewUrl.value) {
-    URL.revokeObjectURL(previewUrl.value)
-    previewUrl.value = ''
-  }
-}
-  try { await api.put('/files/content',{path:editTarget.value.path,content:editContent.value}); closeEdit(); load() }
+async function doSaveFile() {
+  try { await api.put('/files/content',{path:editTarget.value.path,content:editContent.value}); showEdit.value=false; load() }
   catch(e) { editError.value=e.response?.data?.error||'Save failed' }
 }
 async function openChmod(file) {
@@ -1507,16 +1481,7 @@ async function doRename() {
     alert(e.response?.data?.error || (lang.value === 'zh' ? '重命名失败' : 'Rename failed'))
   }
 }
-async function doDelete() {
-  try {
-    await api.delete('/files', { params: { path: deleteTarget.value.path } })
-    deleteTarget.value = null
-    load()
-  } catch(e) {
-    deleteTarget.value = null
-    showToast(e.response?.data?.error || (lang.value === 'zh' ? '删除失败' : 'Delete failed'))
-  }
-}
+async function doDelete() { await api.delete('/files',{params:{path:deleteTarget.value.path}}); deleteTarget.value=null; load() }
 async function doMkdir() {
   if (!newDirName.value) return
   const conflict = files.value.find(f => f.name === newDirName.value)
