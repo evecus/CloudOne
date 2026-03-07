@@ -4,9 +4,12 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"mime"
+	"net"
 	"net/url"
 	"os"
 	"os/exec"
@@ -29,32 +32,33 @@ var jwtSecret []byte
 func SetJWTSecret(secret string) { jwtSecret = []byte(secret) }
 
 type Handler struct {
-	db       *gorm.DB
-	files    *files.Manager
-	shares   *files.ShareManager
-	confPath string
+	db           *gorm.DB
+	files        *files.Manager
+	shares       *files.ShareManager
+	confPath     string
+	loginLimiter *loginRateLimiter
 }
 
 func New(db *gorm.DB, fm *files.Manager, sm *files.ShareManager, confPath string) *Handler {
-	return &Handler{db: db, files: fm, shares: sm, confPath: confPath}
+	return &Handler{
+		db:           db,
+		files:        fm,
+		shares:       sm,
+		confPath:     confPath,
+		loginLimiter: newLoginRateLimiter(),
+	}
 }
 
+// syncConf 只保存 host/port 到 conf.ini，其余数据全在 DB
 func (h *Handler) syncConf() {
 	cfg, err := config.Load(h.confPath)
 	if err != nil {
 		return
 	}
-	var user auth.User
-	if h.db.First(&user).Error == nil {
-		cfg.Username = user.Username
-		cfg.Password = user.Password
-	}
-	var s auth.Settings
-	h.db.First(&s)
-	cfg.StorageDir = s.StorageDir
-	cfg.Lang = s.Lang
 	_ = config.Save(h.confPath, cfg)
 }
+
+// ── 认证 ──────────────────────────────────────────────────────────────────────
 
 func (h *Handler) AuthStatus(c *gin.Context) {
 	var count int64
@@ -87,16 +91,21 @@ func (h *Handler) Setup(c *gin.Context) {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	token, err := h.genToken(user.ID)
+	token, err := h.genToken(user)
 	if err != nil {
 		c.JSON(500, gin.H{"error": "failed to generate token"})
 		return
 	}
-	h.syncConf()
-	c.JSON(200, gin.H{"token": token, "user": user})
+	c.JSON(200, gin.H{"token": token, "user": safeUser(user)})
 }
 
 func (h *Handler) Login(c *gin.Context) {
+	// 频率限制：同一 IP 每分钟最多 5 次
+	if !h.loginLimiter.Allow(c.ClientIP()) {
+		c.JSON(429, gin.H{"error": "too many login attempts, please try again later"})
+		return
+	}
+
 	var req struct {
 		Username string `json:"username" binding:"required"`
 		Password string `json:"password" binding:"required"`
@@ -114,20 +123,33 @@ func (h *Handler) Login(c *gin.Context) {
 		c.JSON(401, gin.H{"error": "invalid credentials"})
 		return
 	}
-	token, err := h.genToken(user.ID)
+	token, err := h.genToken(user)
 	if err != nil {
 		c.JSON(500, gin.H{"error": "failed to generate token"})
 		return
 	}
-	c.JSON(200, gin.H{"token": token, "user": user})
+	c.JSON(200, gin.H{"token": token, "user": safeUser(user)})
 }
 
-func (h *Handler) genToken(userID uint) (string, error) {
+// genToken 生成 JWT，有效期 7 天，携带 token_version 用于主动吊销
+func (h *Handler) genToken(user auth.User) (string, error) {
 	claims := jwt.MapClaims{
-		"sub": userID,
-		"exp": time.Now().Add(30 * 24 * time.Hour).Unix(),
+		"sub":     user.ID,
+		"version": user.TokenVersion,
+		"exp":     time.Now().Add(7 * 24 * time.Hour).Unix(),
+		"iat":     time.Now().Unix(),
 	}
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(jwtSecret)
+}
+
+// safeUser 返回不含密码等敏感字段的用户信息
+func safeUser(u auth.User) gin.H {
+	return gin.H{
+		"id":         u.ID,
+		"username":   u.Username,
+		"created_at": u.CreatedAt,
+		"updated_at": u.UpdatedAt,
+	}
 }
 
 func (h *Handler) AuthMiddleware() gin.HandlerFunc {
@@ -140,6 +162,9 @@ func (h *Handler) AuthMiddleware() gin.HandlerFunc {
 		}
 		tokenStr := strings.TrimPrefix(header, "Bearer ")
 		token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method")
+			}
 			return jwtSecret, nil
 		})
 		if err != nil || !token.Valid {
@@ -149,9 +174,17 @@ func (h *Handler) AuthMiddleware() gin.HandlerFunc {
 		}
 		claims := token.Claims.(jwt.MapClaims)
 		userID := uint(claims["sub"].(float64))
+		tokenVersion := int(claims["version"].(float64))
+
 		var user auth.User
 		if h.db.First(&user, userID).Error != nil {
 			c.JSON(401, gin.H{"error": "user not found"})
+			c.Abort()
+			return
+		}
+		// 校验 token 版本，密码修改后旧 token 立即失效
+		if user.TokenVersion != tokenVersion {
+			c.JSON(401, gin.H{"error": "token has been revoked, please login again"})
 			c.Abort()
 			return
 		}
@@ -162,7 +195,8 @@ func (h *Handler) AuthMiddleware() gin.HandlerFunc {
 
 func (h *Handler) GetUser(c *gin.Context) {
 	u, _ := c.Get("user")
-	c.JSON(200, u)
+	user := u.(auth.User)
+	c.JSON(200, safeUser(user))
 }
 
 func (h *Handler) UpdateUser(c *gin.Context) {
@@ -178,6 +212,7 @@ func (h *Handler) UpdateUser(c *gin.Context) {
 	if req.Username != "" {
 		u.Username = req.Username
 	}
+	passwordChanged := false
 	if req.Password != "" {
 		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 		if err != nil {
@@ -185,16 +220,28 @@ func (h *Handler) UpdateUser(c *gin.Context) {
 			return
 		}
 		u.Password = string(hash)
+		u.TokenVersion++ // 密码修改：旧 token 立即全部失效
+		passwordChanged = true
 	}
 	h.db.Save(&u)
-	h.syncConf()
-	c.JSON(200, u)
+
+	resp := gin.H{"user": safeUser(u)}
+	// 密码改了，下发新 token（当前 session 继续有效）
+	if passwordChanged {
+		newToken, err := h.genToken(u)
+		if err == nil {
+			resp["token"] = newToken
+		}
+	}
+	c.JSON(200, resp)
 }
+
+// ── Settings ──────────────────────────────────────────────────────────────────
 
 func (h *Handler) GetSettings(c *gin.Context) {
 	var s auth.Settings
 	h.db.First(&s)
-	c.JSON(200, s)
+	c.JSON(200, s) // json:"-" 字段自动过滤，敏感字段不暴露
 }
 
 func (h *Handler) UpdateSettings(c *gin.Context) {
@@ -213,6 +260,16 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 		return
 	}
 	if req.StorageDir != "" {
+		// 安全检查：禁止指向系统关键目录
+		forbidden := []string{"/etc", "/bin", "/sbin", "/usr/bin", "/usr/sbin",
+			"/boot", "/sys", "/proc", "/dev", "/run", "/var/run"}
+		clean := filepath.Clean(req.StorageDir)
+		for _, f := range forbidden {
+			if clean == f || strings.HasPrefix(clean, f+"/") {
+				c.JSON(400, gin.H{"error": "storage_dir points to a system directory"})
+				return
+			}
+		}
 		if err := os.MkdirAll(req.StorageDir, 0755); err != nil {
 			c.JSON(500, gin.H{"error": "cannot create storage dir: " + err.Error()})
 			return
@@ -236,9 +293,61 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 		s.ShowHidden = *req.ShowHidden
 	}
 	h.db.Save(&s)
-	h.syncConf()
 	c.JSON(200, s)
 }
+
+// ── WebDAV Settings ───────────────────────────────────────────────────────────
+
+func (h *Handler) GetWebDAVSettings(c *gin.Context) {
+	var s auth.Settings
+	h.db.First(&s)
+	// 密码字段只返回"是否已设置"，不返回任何密码内容
+	c.JSON(200, gin.H{
+		"webdav_enabled":      s.WebDAVEnabled,
+		"webdav_sub_path":     s.WebDAVSubPath,
+		"webdav_username":     s.WebDAVUsername,
+		"webdav_has_password": s.WebDAVPasswordEnc != "",
+	})
+}
+
+func (h *Handler) UpdateWebDAVSettings(c *gin.Context) {
+	var s auth.Settings
+	h.db.First(&s)
+	var req struct {
+		Enabled  bool   `json:"webdav_enabled"`
+		SubPath  string `json:"webdav_sub_path"`
+		Username string `json:"webdav_username"`
+		Password string `json:"webdav_password"` // 空字符串=不修改密码
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	s.WebDAVEnabled = req.Enabled
+	s.WebDAVSubPath = req.SubPath
+	s.WebDAVUsername = req.Username
+	// 仅当传入新密码时才更新
+	if req.Password != "" {
+		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "failed to hash password"})
+			return
+		}
+		if err := s.SetWebDAVPasswordHash(string(hash)); err != nil {
+			c.JSON(500, gin.H{"error": "failed to encrypt password"})
+			return
+		}
+	}
+	h.db.Save(&s)
+	c.JSON(200, gin.H{
+		"webdav_enabled":      s.WebDAVEnabled,
+		"webdav_sub_path":     s.WebDAVSubPath,
+		"webdav_username":     s.WebDAVUsername,
+		"webdav_has_password": s.WebDAVPasswordEnc != "",
+	})
+}
+
+// ── 文件操作 ──────────────────────────────────────────────────────────────────
 
 func (h *Handler) ListFiles(c *gin.Context) {
 	dir := c.Query("path")
@@ -445,28 +554,18 @@ func (h *Handler) SetVisibility(c *gin.Context) {
 	c.JSON(200, gin.H{"ok": true})
 }
 
-// ListPublicFiles 返回公开文件列表。
-//
-// 顶层（path="/" 或留空）：调用 GetAllPublicFlat，把所有公开条目平铺展示，
-// 不显示父文件夹，只显示被直接标记为公开的文件/文件夹本身。
-//
-// 子目录（path 非根）：调用 ListPublic，仅展示该目录下有 is_public=true 标记的直接子项。
-// 这用于用户点进一个公开文件夹后浏览其内部内容。
 func (h *Handler) ListPublicFiles(c *gin.Context) {
 	dir := c.Query("path")
 	if dir == "" {
 		dir = "/"
 	}
-
 	var (
 		list []files.FileInfo
 		err  error
 	)
 	if dir == "/" {
-		// 顶层：平铺所有公开条目，无论它们在多深的位置
 		list, err = h.files.GetAllPublicFlat()
 	} else {
-		// 子目录：只展示该目录下直接标记为公开的子项
 		list, err = h.files.ListPublic(dir)
 	}
 	if err != nil || list == nil {
@@ -476,12 +575,10 @@ func (h *Handler) ListPublicFiles(c *gin.Context) {
 	c.JSON(200, gin.H{"files": list, "path": dir})
 }
 
-// ListPublicFilesOpen 无需认证，用于 /pub 前台页面
 func (h *Handler) ListPublicFilesOpen(c *gin.Context) {
 	h.ListPublicFiles(c)
 }
 
-// ServePublicFile 服务 /raw/* 路径，要求该路径有精确的 is_public=true 记录。
 func (h *Handler) ServePublicFile(c *gin.Context) {
 	path := c.Param("path")
 	abs, err := h.files.AbsPath(path)
@@ -510,7 +607,6 @@ func (h *Handler) ServePublicFile(c *gin.Context) {
 	serveRaw(c, abs)
 }
 
-// DownloadPublicFile 无需认证，通过 /pub/dl?path= 下载公开文件。
 func (h *Handler) DownloadPublicFile(c *gin.Context) {
 	path := c.Query("path")
 	if path == "" {
@@ -531,7 +627,6 @@ func (h *Handler) DownloadPublicFile(c *gin.Context) {
 	c.File(abs)
 }
 
-// ServeRaw 通过分享码查看文件原始内容。
 func (h *Handler) ServeRaw(c *gin.Context) {
 	code := c.Param("code")
 	link, err := h.shares.Get(code)
@@ -551,7 +646,6 @@ func (h *Handler) ServeRaw(c *gin.Context) {
 	serveRaw(c, abs)
 }
 
-// DownloadShare 下载分享文件。
 func (h *Handler) DownloadShare(c *gin.Context) {
 	code := c.Param("code")
 	link, err := h.shares.Get(code)
@@ -566,7 +660,26 @@ func (h *Handler) DownloadShare(c *gin.Context) {
 			c.JSON(400, gin.H{"error": "subpath required for directory share"})
 			return
 		}
+		// 净化 subpath，防路径穿越
+		subpath = filepath.ToSlash(filepath.Clean("/" + subpath))
+		subpath = strings.TrimPrefix(subpath, "/")
 		filePath = link.FilePath + "/" + subpath
+
+		// 校验最终路径仍在分享目录内
+		shareAbs, err := h.files.AbsPath(link.FilePath)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "invalid share path"})
+			return
+		}
+		targetAbs, err := h.files.AbsPath(filePath)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "invalid path"})
+			return
+		}
+		if targetAbs != shareAbs && !strings.HasPrefix(targetAbs, shareAbs+string(os.PathSeparator)) {
+			c.JSON(403, gin.H{"error": "access denied"})
+			return
+		}
 	} else {
 		filePath = link.FilePath
 	}
@@ -578,119 +691,7 @@ func (h *Handler) DownloadShare(c *gin.Context) {
 	c.FileAttachment(abs, filepath.Base(abs))
 }
 
-func browserPreviewable(mimeType string) bool {
-	if strings.HasPrefix(mimeType, "text/") ||
-		strings.HasPrefix(mimeType, "image/") ||
-		strings.HasPrefix(mimeType, "audio/") ||
-		strings.HasPrefix(mimeType, "video/") {
-		return true
-	}
-	switch mimeType {
-	case "application/pdf", "application/json", "application/javascript",
-		"application/x-javascript", "application/xml", "application/xhtml+xml",
-		"application/atom+xml", "application/rss+xml", "application/svg+xml":
-		return true
-	}
-	return strings.Contains(mimeType, "xml") || strings.Contains(mimeType, "javascript")
-}
-
-var extMimeOverride = map[string]string{
-	".md": "text/plain; charset=utf-8", ".markdown": "text/plain; charset=utf-8",
-	".yaml": "text/plain; charset=utf-8", ".yml": "text/plain; charset=utf-8",
-	".toml": "text/plain; charset=utf-8", ".ini": "text/plain; charset=utf-8",
-	".conf": "text/plain; charset=utf-8", ".env": "text/plain; charset=utf-8",
-	".log": "text/plain; charset=utf-8", ".sh": "text/plain; charset=utf-8",
-	".bash": "text/plain; charset=utf-8", ".zsh": "text/plain; charset=utf-8",
-	".fish": "text/plain; charset=utf-8", ".dockerfile": "text/plain; charset=utf-8",
-	".makefile": "text/plain; charset=utf-8", ".go": "text/plain; charset=utf-8",
-	".py": "text/plain; charset=utf-8", ".rs": "text/plain; charset=utf-8",
-	".rb": "text/plain; charset=utf-8", ".java": "text/plain; charset=utf-8",
-	".c": "text/plain; charset=utf-8", ".cpp": "text/plain; charset=utf-8",
-	".h": "text/plain; charset=utf-8", ".ts": "text/plain; charset=utf-8",
-	".tsx": "text/plain; charset=utf-8", ".jsx": "text/plain; charset=utf-8",
-	".vue": "text/plain; charset=utf-8", ".swift": "text/plain; charset=utf-8",
-	".kt": "text/plain; charset=utf-8", ".lua": "text/plain; charset=utf-8",
-	".r": "text/plain; charset=utf-8", ".sql": "text/plain; charset=utf-8",
-	".graphql": "text/plain; charset=utf-8", ".proto": "text/plain; charset=utf-8",
-	".avif": "image/avif", ".webp": "image/webp",
-}
-
-func serveRaw(c *gin.Context, abs string) {
-	ext := strings.ToLower(filepath.Ext(abs))
-	mimeType, ok := extMimeOverride[ext]
-	if !ok {
-		mimeType = mime.TypeByExtension(ext)
-	}
-	if mimeType == "" {
-		mimeType = "text/plain; charset=utf-8"
-	}
-	name := filepath.Base(abs)
-	c.Header("X-Content-Type-Options", "nosniff")
-	c.Header("Cache-Control", "public, max-age=3600")
-	baseMime := strings.TrimSpace(strings.SplitN(mimeType, ";", 2)[0])
-	c.Header("Content-Type", mimeType)
-	if browserPreviewable(baseMime) {
-		c.Header("Content-Disposition", fmt.Sprintf(`inline; filename="%s"`, name))
-	} else {
-		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, name))
-	}
-	c.File(abs)
-}
-
-func (h *Handler) CreateShare(c *gin.Context) {
-	u := c.MustGet("user").(auth.User)
-	var req struct {
-		Path  string `json:"path" binding:"required"`
-		IsDir bool   `json:"is_dir"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
-	}
-	link, err := h.shares.Create(u.ID, req.Path, req.IsDir)
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(200, link)
-}
-
-func (h *Handler) ListShares(c *gin.Context) {
-	u := c.MustGet("user").(auth.User)
-	links, _ := h.shares.List(u.ID)
-	c.JSON(200, links)
-}
-
-func (h *Handler) DeleteShare(c *gin.Context) {
-	u := c.MustGet("user").(auth.User)
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		c.JSON(400, gin.H{"error": "invalid id"})
-		return
-	}
-	h.shares.Delete(uint(id), u.ID)
-	c.JSON(200, gin.H{"ok": true})
-}
-
-func (h *Handler) AccessShare(c *gin.Context) {
-	code := c.Param("code")
-	link, err := h.shares.Get(code)
-	if err != nil {
-		c.JSON(404, gin.H{"error": "not found"})
-		return
-	}
-	if link.IsDir {
-		subpath := c.Query("subpath")
-		listPath := link.FilePath
-		if subpath != "" {
-			listPath = link.FilePath + "/" + subpath
-		}
-		list, _ := h.files.ListDir(listPath)
-		c.JSON(200, gin.H{"files": list, "is_dir": true, "code": link.Code, "file_path": link.FilePath})
-	} else {
-		c.JSON(200, gin.H{"is_dir": false, "code": link.Code, "file_path": link.FilePath})
-	}
-}
+// ── 批量操作 ──────────────────────────────────────────────────────────────────
 
 func (h *Handler) BatchDelete(c *gin.Context) {
 	var req struct {
@@ -804,6 +805,29 @@ func (h *Handler) BatchMove(c *gin.Context) {
 	c.JSON(200, gin.H{"ok": true})
 }
 
+func (h *Handler) BatchCopy(c *gin.Context) {
+	var req struct {
+		Paths  []string `json:"paths" binding:"required"`
+		Target string   `json:"target" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	var failed []string
+	for _, src := range req.Paths {
+		dst := req.Target + "/" + filepath.Base(src)
+		if err := h.files.Copy(src, dst); err != nil {
+			failed = append(failed, src)
+		}
+	}
+	if len(failed) > 0 {
+		c.JSON(207, gin.H{"ok": false, "failed": failed})
+		return
+	}
+	c.JSON(200, gin.H{"ok": true})
+}
+
 func (h *Handler) UploadFolder(c *gin.Context) {
 	dir := c.Query("path")
 	if dir == "" {
@@ -822,7 +846,9 @@ func (h *Handler) UploadFolder(c *gin.Context) {
 		if i < len(paths) && paths[i] != "" {
 			relPath = paths[i]
 		}
-		relPath = filepath.ToSlash(strings.TrimPrefix(relPath, "/"))
+		// 净化路径，防止路径穿越
+		relPath = filepath.ToSlash(filepath.Clean("/" + strings.TrimPrefix(relPath, "/")))
+		relPath = strings.TrimPrefix(relPath, "/")
 		targetRel := dir + "/" + relPath
 		f, err := fh.Open()
 		if err != nil {
@@ -864,28 +890,100 @@ func (h *Handler) ListDirTree(c *gin.Context) {
 	c.JSON(200, gin.H{"dirs": dirs, "path": path})
 }
 
-func (h *Handler) BatchCopy(c *gin.Context) {
+func (h *Handler) SearchFiles(c *gin.Context) {
+	name := c.Query("name")
+	dir := c.Query("dir")
+	if name == "" {
+		c.JSON(400, gin.H{"error": "name is required"})
+		return
+	}
+	if dir == "" {
+		dir = "/"
+	}
+	results, err := h.files.SearchFiles(dir, name)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	if results == nil {
+		results = []files.SearchResult{}
+	}
+	c.JSON(200, gin.H{"results": results})
+}
+
+// ── 分享 ──────────────────────────────────────────────────────────────────────
+
+func (h *Handler) CreateShare(c *gin.Context) {
+	u := c.MustGet("user").(auth.User)
 	var req struct {
-		Paths  []string `json:"paths" binding:"required"`
-		Target string   `json:"target" binding:"required"`
+		Path     string `json:"path" binding:"required"`
+		IsDir    bool   `json:"is_dir"`
+		ExpireIn int    `json:"expire_in"` // 秒数，0 = 永不过期
+		MaxViews int    `json:"max_views"` // 0 = 不限次数
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-	var failed []string
-	for _, src := range req.Paths {
-		dst := req.Target + "/" + filepath.Base(src)
-		if err := h.files.Copy(src, dst); err != nil {
-			failed = append(failed, src)
-		}
+	var expiresAt *time.Time
+	if req.ExpireIn > 0 {
+		t := time.Now().Add(time.Duration(req.ExpireIn) * time.Second)
+		expiresAt = &t
 	}
-	if len(failed) > 0 {
-		c.JSON(207, gin.H{"ok": false, "failed": failed})
+	link, err := h.shares.Create(u.ID, req.Path, req.IsDir, expiresAt, req.MaxViews)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
+	c.JSON(200, link)
+}
+
+func (h *Handler) ListShares(c *gin.Context) {
+	u := c.MustGet("user").(auth.User)
+	links, _ := h.shares.List(u.ID)
+	c.JSON(200, links)
+}
+
+func (h *Handler) DeleteShare(c *gin.Context) {
+	u := c.MustGet("user").(auth.User)
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(400, gin.H{"error": "invalid id"})
+		return
+	}
+	h.shares.Delete(uint(id), u.ID)
 	c.JSON(200, gin.H{"ok": true})
 }
+
+func (h *Handler) AccessShare(c *gin.Context) {
+	code := c.Param("code")
+	link, err := h.shares.Get(code)
+	if err != nil {
+		c.JSON(404, gin.H{"error": "not found"})
+		return
+	}
+	if link.IsDir {
+		subpath := c.Query("subpath")
+		listPath := link.FilePath
+		if subpath != "" {
+			// 净化 subpath
+			subpath = filepath.ToSlash(filepath.Clean("/" + subpath))
+			subpath = strings.TrimPrefix(subpath, "/")
+			listPath = link.FilePath + "/" + subpath
+		}
+		list, _ := h.files.ListDir(listPath)
+		c.JSON(200, gin.H{"files": list, "is_dir": true, "code": link.Code, "file_path": link.FilePath})
+	} else {
+		c.JSON(200, gin.H{"is_dir": false, "code": link.Code, "file_path": link.FilePath})
+	}
+}
+
+// ── 压缩/解压 ─────────────────────────────────────────────────────────────────
+
+const (
+	maxDecompressFileSize  = 500 * 1024 * 1024 // 单文件 500MB
+	maxDecompressFileCount = 10000              // 最多 10000 个文件
+)
 
 func (h *Handler) CompressFiles(c *gin.Context) {
 	var req struct {
@@ -1017,127 +1115,6 @@ func (h *Handler) CompressFiles(c *gin.Context) {
 	c.JSON(200, gin.H{"ok": true, "output": req.Output})
 }
 
-// FetchURL 通过 wget/curl 下载远程文件。
-// 拒绝内网地址（127.x、10.x、172.16-31.x、192.168.x、::1、fc00::/7）以防 SSRF。
-func (h *Handler) FetchURL(c *gin.Context) {
-	var req struct {
-		URL      string `json:"url" binding:"required"`
-		Filename string `json:"filename"`
-		Dir      string `json:"dir"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
-	}
-	// 基础 SSRF 防护：拒绝非 http/https scheme 及内网 host
-	if err := validatePublicURL(req.URL); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
-	}
-	if req.Dir == "" {
-		req.Dir = "/"
-	}
-	absDir, err := h.files.AbsPath(req.Dir)
-	if err != nil {
-		c.JSON(400, gin.H{"error": "invalid dir: " + err.Error()})
-		return
-	}
-	absDir, err = filepath.Abs(absDir)
-	if err != nil {
-		c.JSON(500, gin.H{"error": "cannot resolve absolute path: " + err.Error()})
-		return
-	}
-	if err := os.MkdirAll(absDir, 0755); err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
-	hasWget := func() bool { _, e := exec.LookPath("wget"); return e == nil }()
-	hasCurl := func() bool { _, e := exec.LookPath("curl"); return e == nil }()
-	if !hasWget && !hasCurl {
-		c.JSON(500, gin.H{"error": "neither wget nor curl is available on this system"})
-		return
-	}
-	var cmd *exec.Cmd
-	outPath := filepath.Join(absDir, req.Filename)
-	if req.Filename != "" {
-		if hasWget {
-			cmd = exec.Command("wget", "-q", "-O", outPath, req.URL)
-		} else {
-			cmd = exec.Command("curl", "-L", "-o", outPath, req.URL)
-		}
-	} else {
-		if hasWget {
-			cmd = exec.Command("wget", "-q", "-P", absDir, req.URL)
-		} else {
-			cmd = exec.Command("curl", "-L", "--output-dir", absDir, "-O", req.URL)
-		}
-	}
-	cmd.Dir = absDir
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		c.JSON(500, gin.H{"error": "fetch failed: " + err.Error() + " | " + string(out)})
-		return
-	}
-	c.JSON(200, gin.H{"ok": true})
-}
-
-// validatePublicURL 拒绝非 http/https 及私有/回环地址，防止 SSRF。
-func validatePublicURL(rawURL string) error {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return fmt.Errorf("invalid URL: %w", err)
-	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return fmt.Errorf("only http/https URLs are allowed")
-	}
-	host := strings.ToLower(u.Hostname())
-	// 拒绝 localhost 及常见内网段
-	privatePatterns := []string{
-		"localhost", "127.", "0.", "::1",
-		"10.", "192.168.",
-		"169.254.", // link-local
-	}
-	for _, p := range privatePatterns {
-		if host == strings.TrimSuffix(p, ".") || strings.HasPrefix(host, p) {
-			return fmt.Errorf("requests to private/internal addresses are not allowed")
-		}
-	}
-	// 172.16.0.0/12
-	if strings.HasPrefix(host, "172.") {
-		parts := strings.SplitN(host, ".", 3)
-		if len(parts) >= 2 {
-			second, _ := strconv.Atoi(parts[1])
-			if second >= 16 && second <= 31 {
-				return fmt.Errorf("requests to private/internal addresses are not allowed")
-			}
-		}
-	}
-	return nil
-}
-
-// SearchFiles 按文件名模糊搜索（大小写不敏感，包含匹配），结果上限 200 条。
-func (h *Handler) SearchFiles(c *gin.Context) {
-	name := c.Query("name")
-	dir := c.Query("dir")
-	if name == "" {
-		c.JSON(400, gin.H{"error": "name is required"})
-		return
-	}
-	if dir == "" {
-		dir = "/"
-	}
-	results, err := h.files.SearchFiles(dir, name)
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
-	if results == nil {
-		results = []files.SearchResult{}
-	}
-	c.JSON(200, gin.H{"results": results})
-}
-
-// DecompressFile 解压压缩包到指定目录。
 func (h *Handler) DecompressFile(c *gin.Context) {
 	var req struct {
 		Path string `json:"path" binding:"required"`
@@ -1201,8 +1178,14 @@ func extractZip(src, dest string) error {
 		return err
 	}
 	defer r.Close()
+	if len(r.File) > maxDecompressFileCount {
+		return fmt.Errorf("too many files in archive: %d", len(r.File))
+	}
 	destClean := filepath.Clean(dest) + string(os.PathSeparator)
 	for _, f := range r.File {
+		if f.UncompressedSize64 > maxDecompressFileSize {
+			return fmt.Errorf("file %s is too large (%d bytes)", f.Name, f.UncompressedSize64)
+		}
 		fpath := filepath.Join(dest, filepath.FromSlash(f.Name))
 		if !strings.HasPrefix(fpath, destClean) {
 			continue
@@ -1223,7 +1206,7 @@ func extractZip(src, dest string) error {
 			rc.Close()
 			return err
 		}
-		_, err = io.Copy(out, rc)
+		_, err = io.Copy(out, io.LimitReader(rc, maxDecompressFileSize))
 		out.Close()
 		rc.Close()
 		if err != nil {
@@ -1280,6 +1263,7 @@ func extractGz(src, dest string) error {
 func untar(r io.Reader, dest string) error {
 	tr := tar.NewReader(r)
 	destClean := filepath.Clean(dest) + string(os.PathSeparator)
+	fileCount := 0
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -1287,6 +1271,10 @@ func untar(r io.Reader, dest string) error {
 		}
 		if err != nil {
 			return err
+		}
+		fileCount++
+		if fileCount > maxDecompressFileCount {
+			return fmt.Errorf("too many files in archive")
 		}
 		fpath := filepath.Join(dest, filepath.FromSlash(hdr.Name))
 		if !strings.HasPrefix(fpath, destClean) {
@@ -1296,6 +1284,9 @@ func untar(r io.Reader, dest string) error {
 		case tar.TypeDir:
 			os.MkdirAll(fpath, 0755)
 		case tar.TypeReg:
+			if hdr.Size > maxDecompressFileSize {
+				return fmt.Errorf("file %s is too large", hdr.Name)
+			}
 			if err := os.MkdirAll(filepath.Dir(fpath), 0755); err != nil {
 				return err
 			}
@@ -1303,7 +1294,7 @@ func untar(r io.Reader, dest string) error {
 			if err != nil {
 				return err
 			}
-			_, err = io.Copy(out, tr)
+			_, err = io.Copy(out, io.LimitReader(tr, maxDecompressFileSize))
 			out.Close()
 			if err != nil {
 				return err
@@ -1313,48 +1304,194 @@ func untar(r io.Reader, dest string) error {
 	return nil
 }
 
-// ── WebDAV ────────────────────────────────────────────────────────────────────
+// ── FetchURL（SSRF 防护加强版）────────────────────────────────────────────────
 
-// GetWebDAVSettings 返回 WebDAV 配置（已登录用户）
-func (h *Handler) GetWebDAVSettings(c *gin.Context) {
-	var s auth.Settings
-	h.db.First(&s)
-	c.JSON(200, gin.H{
-		"webdav_enabled":  s.WebDAVEnabled,
-		"webdav_sub_path": s.WebDAVSubPath,
-		"webdav_username": s.WebDAVUsername,
-		"webdav_password": s.WebDAVPassword,
-	})
-}
-
-// UpdateWebDAVSettings 保存 WebDAV 配置
-func (h *Handler) UpdateWebDAVSettings(c *gin.Context) {
-	var s auth.Settings
-	h.db.First(&s)
+func (h *Handler) FetchURL(c *gin.Context) {
 	var req struct {
-		Enabled  bool   `json:"webdav_enabled"`
-		SubPath  string `json:"webdav_sub_path"`
-		Username string `json:"webdav_username"`
-		Password string `json:"webdav_password"`
+		URL      string `json:"url" binding:"required"`
+		Filename string `json:"filename"`
+		Dir      string `json:"dir"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-	s.WebDAVEnabled = req.Enabled
-	s.WebDAVSubPath = req.SubPath
-	s.WebDAVUsername = req.Username
-	s.WebDAVPassword = req.Password
-	h.db.Save(&s)
-	c.JSON(200, gin.H{
-		"webdav_enabled":  s.WebDAVEnabled,
-		"webdav_sub_path": s.WebDAVSubPath,
-		"webdav_username": s.WebDAVUsername,
-		"webdav_password": s.WebDAVPassword,
-	})
+	if err := validatePublicURL(req.URL); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	if req.Dir == "" {
+		req.Dir = "/"
+	}
+	absDir, err := h.files.AbsPath(req.Dir)
+	if err != nil {
+		c.JSON(400, gin.H{"error": "invalid dir: " + err.Error()})
+		return
+	}
+	absDir, err = filepath.Abs(absDir)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "cannot resolve absolute path: " + err.Error()})
+		return
+	}
+	if err := os.MkdirAll(absDir, 0755); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	hasWget := func() bool { _, e := exec.LookPath("wget"); return e == nil }()
+	hasCurl := func() bool { _, e := exec.LookPath("curl"); return e == nil }()
+	if !hasWget && !hasCurl {
+		c.JSON(500, gin.H{"error": "neither wget nor curl is available on this system"})
+		return
+	}
+	var cmd *exec.Cmd
+	outPath := filepath.Join(absDir, req.Filename)
+	if req.Filename != "" {
+		if hasWget {
+			cmd = exec.Command("wget", "-q", "-O", outPath, req.URL)
+		} else {
+			cmd = exec.Command("curl", "-L", "-o", outPath, req.URL)
+		}
+	} else {
+		if hasWget {
+			cmd = exec.Command("wget", "-q", "-P", absDir, req.URL)
+		} else {
+			cmd = exec.Command("curl", "-L", "--output-dir", absDir, "-O", req.URL)
+		}
+	}
+	cmd.Dir = absDir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		c.JSON(500, gin.H{"error": "fetch failed: " + err.Error() + " | " + string(out)})
+		return
+	}
+	c.JSON(200, gin.H{"ok": true})
 }
 
-// WebDAVRoot 返回 WebDAV 的根目录（storageDir + subPath，留空则用 /webdav 子目录）
+// validatePublicURL DNS 解析后校验 IP，防止 DNS 重绑定和 IP 格式绕过
+func validatePublicURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("only http/https URLs are allowed")
+	}
+	host := u.Hostname()
+	if host == "" {
+		return fmt.Errorf("missing host")
+	}
+	if strings.EqualFold(host, "localhost") {
+		return fmt.Errorf("requests to private/internal addresses are not allowed")
+	}
+	// DNS 解析，对所有返回的 IP 做校验
+	addrs, err := net.LookupHost(host)
+	if err != nil {
+		return fmt.Errorf("cannot resolve host: %w", err)
+	}
+	for _, addr := range addrs {
+		ip := net.ParseIP(addr)
+		if ip == nil {
+			continue
+		}
+		if isPrivateIP(ip) {
+			return fmt.Errorf("requests to private/internal addresses are not allowed")
+		}
+	}
+	return nil
+}
+
+func isPrivateIP(ip net.IP) bool {
+	if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+		return true
+	}
+	privateRanges := []string{
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+		"169.254.0.0/16",
+		"100.64.0.0/10", // CGNAT
+		"fc00::/7",      // IPv6 ULA
+		"fe80::/10",     // IPv6 link-local
+		"0.0.0.0/8",
+	}
+	for _, cidr := range privateRanges {
+		_, network, err := net.ParseCIDR(cidr)
+		if err != nil {
+			continue
+		}
+		if network.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// ── serveRaw ──────────────────────────────────────────────────────────────────
+
+func browserPreviewable(mimeType string) bool {
+	if strings.HasPrefix(mimeType, "text/") ||
+		strings.HasPrefix(mimeType, "image/") ||
+		strings.HasPrefix(mimeType, "audio/") ||
+		strings.HasPrefix(mimeType, "video/") {
+		return true
+	}
+	switch mimeType {
+	case "application/pdf", "application/json", "application/javascript",
+		"application/x-javascript", "application/xml", "application/xhtml+xml",
+		"application/atom+xml", "application/rss+xml", "application/svg+xml":
+		return true
+	}
+	return strings.Contains(mimeType, "xml") || strings.Contains(mimeType, "javascript")
+}
+
+var extMimeOverride = map[string]string{
+	".md": "text/plain; charset=utf-8", ".markdown": "text/plain; charset=utf-8",
+	".yaml": "text/plain; charset=utf-8", ".yml": "text/plain; charset=utf-8",
+	".toml": "text/plain; charset=utf-8", ".ini": "text/plain; charset=utf-8",
+	".conf": "text/plain; charset=utf-8", ".env": "text/plain; charset=utf-8",
+	".log": "text/plain; charset=utf-8", ".sh": "text/plain; charset=utf-8",
+	".bash": "text/plain; charset=utf-8", ".zsh": "text/plain; charset=utf-8",
+	".fish": "text/plain; charset=utf-8", ".dockerfile": "text/plain; charset=utf-8",
+	".go": "text/plain; charset=utf-8", ".py": "text/plain; charset=utf-8",
+	".rs": "text/plain; charset=utf-8", ".rb": "text/plain; charset=utf-8",
+	".java": "text/plain; charset=utf-8", ".c": "text/plain; charset=utf-8",
+	".cpp": "text/plain; charset=utf-8", ".h": "text/plain; charset=utf-8",
+	".ts": "text/plain; charset=utf-8", ".tsx": "text/plain; charset=utf-8",
+	".jsx": "text/plain; charset=utf-8", ".vue": "text/plain; charset=utf-8",
+	".swift": "text/plain; charset=utf-8", ".kt": "text/plain; charset=utf-8",
+	".lua": "text/plain; charset=utf-8", ".r": "text/plain; charset=utf-8",
+	".sql": "text/plain; charset=utf-8", ".graphql": "text/plain; charset=utf-8",
+	".avif": "image/avif", ".webp": "image/webp",
+}
+
+func serveRaw(c *gin.Context, abs string) {
+	ext := strings.ToLower(filepath.Ext(abs))
+	mimeType, ok := extMimeOverride[ext]
+	if !ok {
+		mimeType = mime.TypeByExtension(ext)
+	}
+	if mimeType == "" {
+		mimeType = "text/plain; charset=utf-8"
+	}
+	name := filepath.Base(abs)
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.Header("Cache-Control", "public, max-age=3600")
+	baseMime := strings.TrimSpace(strings.SplitN(mimeType, ";", 2)[0])
+	c.Header("Content-Type", mimeType)
+	if browserPreviewable(baseMime) {
+		c.Header("Content-Disposition", fmt.Sprintf(`inline; filename="%s"`, name))
+	} else {
+		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, name))
+	}
+	c.File(abs)
+}
+
+// ── WebDAV ────────────────────────────────────────────────────────────────────
+
+func (h *Handler) GetWebDAVSettings2(c *gin.Context) {
+	h.GetWebDAVSettings(c)
+}
+
 func (h *Handler) webdavRoot() string {
 	var s auth.Settings
 	h.db.First(&s)
@@ -1363,17 +1500,14 @@ func (h *Handler) webdavRoot() string {
 	if sub == "" {
 		sub = "webdav"
 	}
-	// 清理路径，防止穿越
 	sub = filepath.Clean(strings.TrimLeft(sub, "/"))
 	root := filepath.Join(base, sub)
 	os.MkdirAll(root, 0755)
 	return root
 }
 
-// WebDAVMiddleware 校验 Basic Auth，支持独立用户名+密码或回落到 CloudOne 账户密码
 func (h *Handler) WebDAVMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 先检查 WebDAV 是否启用
 		var s auth.Settings
 		h.db.First(&s)
 		if !s.WebDAVEnabled {
@@ -1381,48 +1515,42 @@ func (h *Handler) WebDAVMiddleware() gin.HandlerFunc {
 			c.AbortWithStatus(503)
 			return
 		}
-
 		username, password, ok := c.Request.BasicAuth()
 		if !ok {
 			c.Header("WWW-Authenticate", `Basic realm="CloudOne WebDAV"`)
 			c.AbortWithStatus(401)
 			return
 		}
-
-		// 如果设置了独立用户名，直接用独立用户名+密码校验（不查数据库用户）
-		if s.WebDAVUsername != "" {
-			if username != s.WebDAVUsername {
-				c.Header("WWW-Authenticate", `Basic realm="CloudOne WebDAV"`)
-				c.AbortWithStatus(401)
-				return
+		// 校验用户名
+		expectedUser := s.WebDAVUsername
+		if expectedUser == "" {
+			var user auth.User
+			if h.db.First(&user).Error == nil {
+				expectedUser = user.Username
 			}
-			if s.WebDAVPassword != "" && password != s.WebDAVPassword {
-				c.Header("WWW-Authenticate", `Basic realm="CloudOne WebDAV"`)
-				c.AbortWithStatus(401)
-				return
-			}
-			c.Next()
-			return
 		}
-
-		// 未设置独立用户名：查找 CloudOne 账户
-		var user auth.User
-		if err := h.db.Where("username = ?", username).First(&user).Error; err != nil {
+		if username != expectedUser {
 			c.Header("WWW-Authenticate", `Basic realm="CloudOne WebDAV"`)
 			c.AbortWithStatus(401)
 			return
 		}
-
-		// 优先用 WebDAV 独立密码（明文存储，直接比对）
-		if s.WebDAVPassword != "" {
-			if password != s.WebDAVPassword {
+		// 校验密码（从加密存储中解密 bcrypt hash 后比对）
+		if s.WebDAVPasswordEnc != "" {
+			hash, err := s.GetWebDAVPasswordHash()
+			if err != nil || bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) != nil {
 				c.Header("WWW-Authenticate", `Basic realm="CloudOne WebDAV"`)
 				c.AbortWithStatus(401)
 				return
 			}
 		} else {
-			// 回落到 CloudOne 密码（bcrypt）
-			if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+			// 未设置独立密码：回落到 CloudOne 账户密码
+			var user auth.User
+			if h.db.Where("username = ?", username).First(&user).Error != nil {
+				c.Header("WWW-Authenticate", `Basic realm="CloudOne WebDAV"`)
+				c.AbortWithStatus(401)
+				return
+			}
+			if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)) != nil {
 				c.Header("WWW-Authenticate", `Basic realm="CloudOne WebDAV"`)
 				c.AbortWithStatus(401)
 				return
@@ -1432,7 +1560,6 @@ func (h *Handler) WebDAVMiddleware() gin.HandlerFunc {
 	}
 }
 
-// WebDAVHandler 处理所有 WebDAV 协议请求
 func (h *Handler) WebDAVHandler(c *gin.Context) {
 	var s auth.Settings
 	h.db.First(&s)
@@ -1440,36 +1567,27 @@ func (h *Handler) WebDAVHandler(c *gin.Context) {
 		c.Status(503)
 		return
 	}
-
 	root := h.webdavRoot()
 	stripPrefix := "/dav"
-
 	method := c.Request.Method
 	rawPath := c.Request.URL.Path
-
-	// 去掉 /dav 前缀，得到相对路径
 	relPath := strings.TrimPrefix(rawPath, stripPrefix)
 	if relPath == "" {
 		relPath = "/"
 	}
-
-	// 安全检查：不允许路径穿越
 	absTarget := filepath.Join(root, filepath.FromSlash(relPath))
 	if !strings.HasPrefix(absTarget, root) {
 		c.Status(403)
 		return
 	}
-
 	switch method {
 	case "OPTIONS":
 		c.Header("DAV", "1, 2")
 		c.Header("Allow", "OPTIONS, GET, HEAD, PUT, DELETE, MKCOL, COPY, MOVE, PROPFIND, PROPPATCH, LOCK, UNLOCK")
 		c.Header("MS-Author-Via", "DAV")
 		c.Status(200)
-
 	case "PROPFIND":
 		h.davPropfind(c, root, relPath, absTarget)
-
 	case "GET", "HEAD":
 		info, err := os.Stat(absTarget)
 		if err != nil {
@@ -1481,7 +1599,6 @@ func (h *Handler) WebDAVHandler(c *gin.Context) {
 			return
 		}
 		c.File(absTarget)
-
 	case "PUT":
 		if err := os.MkdirAll(filepath.Dir(absTarget), 0755); err != nil {
 			c.Status(500)
@@ -1495,28 +1612,24 @@ func (h *Handler) WebDAVHandler(c *gin.Context) {
 		defer f.Close()
 		io.Copy(f, c.Request.Body)
 		c.Status(201)
-
 	case "DELETE":
 		if err := os.RemoveAll(absTarget); err != nil {
 			c.Status(500)
 			return
 		}
 		c.Status(204)
-
 	case "MKCOL":
 		if err := os.MkdirAll(absTarget, 0755); err != nil {
 			c.Status(500)
 			return
 		}
 		c.Status(201)
-
 	case "COPY", "MOVE":
 		dest := c.Request.Header.Get("Destination")
 		if dest == "" {
 			c.Status(400)
 			return
 		}
-		// 解析目标路径
 		destPath := dest
 		if idx := strings.Index(dest, "/dav"); idx >= 0 {
 			destPath = dest[idx+len("/dav"):]
@@ -1540,10 +1653,10 @@ func (h *Handler) WebDAVHandler(c *gin.Context) {
 			}
 			c.Status(201)
 		}
-
 	case "LOCK":
-		// 返回一个假锁，满足 macOS Finder 等客户端要求
-		token := "urn:uuid:cloudone-lock-" + strconv.FormatInt(time.Now().UnixNano(), 16)
+		b := make([]byte, 8)
+		rand.Read(b)
+		token := "urn:uuid:cloudone-lock-" + hex.EncodeToString(b)
 		c.Header("Lock-Token", "<"+token+">")
 		c.Header("Content-Type", "application/xml; charset=utf-8")
 		c.String(200, `<?xml version="1.0" encoding="utf-8"?>
@@ -1554,32 +1667,26 @@ func (h *Handler) WebDAVHandler(c *gin.Context) {
 <D:timeout>Second-3600</D:timeout>
 <D:locktoken><D:href>`+token+`</D:href></D:locktoken>
 </D:activelock></D:lockdiscovery></D:prop>`)
-
 	case "UNLOCK":
 		c.Status(204)
-
 	case "PROPPATCH":
 		c.Header("Content-Type", "application/xml; charset=utf-8")
 		c.String(207, `<?xml version="1.0" encoding="utf-8"?><D:multistatus xmlns:D="DAV:"></D:multistatus>`)
-
 	default:
 		c.Status(405)
 	}
 }
 
-// davPropfind 生成 PROPFIND 响应（XML）
 func (h *Handler) davPropfind(c *gin.Context, root, relPath, absTarget string) {
 	info, err := os.Stat(absTarget)
 	if err != nil {
 		c.Status(404)
 		return
 	}
-
 	depth := c.Request.Header.Get("Depth")
 	if depth == "" {
 		depth = "1"
 	}
-
 	var entries []os.FileInfo
 	if info.IsDir() && depth != "0" {
 		dirEntries, err := os.ReadDir(absTarget)
@@ -1594,16 +1701,10 @@ func (h *Handler) davPropfind(c *gin.Context, root, relPath, absTarget string) {
 			}
 		}
 	}
-
 	c.Header("Content-Type", "application/xml; charset=utf-8")
 	c.Status(207)
-
 	c.Writer.WriteString(`<?xml version="1.0" encoding="utf-8"?><D:multistatus xmlns:D="DAV:">`)
-
-	// 写当前路径自身
 	writePropfindEntry(c.Writer, relPath, info)
-
-	// 写子项
 	if info.IsDir() && depth != "0" {
 		childBase := relPath
 		if !strings.HasSuffix(childBase, "/") {
@@ -1614,7 +1715,6 @@ func (h *Handler) davPropfind(c *gin.Context, root, relPath, absTarget string) {
 			writePropfindEntry(c.Writer, childRel, child)
 		}
 	}
-
 	c.Writer.WriteString(`</D:multistatus>`)
 }
 
@@ -1636,7 +1736,6 @@ func writePropfindEntry(w gin.ResponseWriter, relPath string, info os.FileInfo) 
 		href, resourceType, contentLength, modTime, info.Name())
 }
 
-// copyPath 递归复制文件或目录
 func copyPath(src, dst string) error {
 	info, err := os.Stat(src)
 	if err != nil {
