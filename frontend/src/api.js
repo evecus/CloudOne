@@ -12,8 +12,12 @@ api.interceptors.response.use(
   r => r,
   err => {
     if (err.response?.status === 401) {
+      // 清除本地 token，跳转登录页
       localStorage.removeItem('token')
-      window.location.href = '/login'
+      // 避免在登录页触发重定向循环
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login'
+      }
     }
     return Promise.reject(err)
   }
