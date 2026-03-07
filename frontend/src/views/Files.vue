@@ -316,7 +316,7 @@
           </div>
           <div v-if="isArchive(ctxMenu.file?.name)" class="ctx-item" @click="ctxAction('extract')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8l-4-4H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V8z"/><polyline points="17 4 17 8 21 8"/><polyline points="12 18 12 12"/><polyline points="9 15 12 18 15 15"/></svg>
-            <span>{{ lang==='zh'?'解压到当前目录':'Extract Here' }}</span>
+            <span>{{ lang==='zh'?'解压':'Extract' }}</span>
           </div>
           <div class="ctx-divider"></div>
           <div class="ctx-item" @click="ctxAction('chmod')">
