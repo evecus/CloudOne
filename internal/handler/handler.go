@@ -370,6 +370,9 @@ func (h *Handler) UploadFile(c *gin.Context) {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
+	// MultipartForm 会把文件数据缓存在内存或临时文件中，
+	// 函数退出时必须手动释放，否则内存不会回收。
+	defer form.RemoveAll()
 	fileHeaders := form.File["files"]
 	var failed []string
 	for _, fh := range fileHeaders {
@@ -849,6 +852,7 @@ func (h *Handler) UploadFolder(c *gin.Context) {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
+	defer form.RemoveAll()
 	fileHeaders := form.File["files"]
 	paths := form.Value["paths"]
 	var failed []string
