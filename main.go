@@ -10,9 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"runtime/debug"
-	"time"
 
 	"github.com/cloudone/cloudone/internal/auth"
 	"github.com/cloudone/cloudone/internal/config"
@@ -45,28 +43,17 @@ func init() {
 }
 
 func main() {
-	// ── 内存优化 ──────────────────────────────────────────────────────────────
-	// 1. 降低 GC 目标比例（默认 100%），让 GC 更积极地回收内存
-	//    GOGC=20 意味着堆增长超过上次 GC 后存活对象的 20% 就触发 GC
-	//    对于文件服务这类对象生命周期短的场景效果显著
+	// ── 内存管理配置 ──────────────────────────────────────────────────────────
+	// 设置更激进的 GC 触发比例（默认100，改为50意味着堆增长50%就触发GC）
+	// 可通过环境变量 GOGC 覆盖（如 GOGC=100 恢复默认）
 	if os.Getenv("GOGC") == "" {
-		debug.SetGCPercent(20)
+		debug.SetGCPercent(50)
 	}
-	// 2. 设置软内存上限（可通过环境变量 GOMEMLIMIT 覆盖，如 GOMEMLIMIT=256MiB）
-	//    不设上限时仅依赖 GOGC 策略
+	// 软内存上限：超过此值时 GC 会更频繁运行并积极归还内存给 OS。
+	// 默认 512MB，可通过环境变量 GOMEMLIMIT 覆盖（如 GOMEMLIMIT=1GiB）
 	if os.Getenv("GOMEMLIMIT") == "" {
-		debug.SetMemoryLimit(1<<62) // 保持无限制，仅依赖 GOGC
+		debug.SetMemoryLimit(512 << 20) // 512 MiB
 	}
-	// 3. 后台定期触发 GC 并归还空闲内存给 OS（每 2 分钟一次）
-	//    解决 Go 默认长达 5 分钟不归还 OS 的问题
-	go func() {
-		ticker := time.NewTicker(2 * time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			runtime.GC()
-			debug.FreeOSMemory()
-		}
-	}()
 
 	dataDir := "./data"
 	if err := os.MkdirAll(dataDir, 0755); err != nil {

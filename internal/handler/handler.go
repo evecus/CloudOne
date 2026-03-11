@@ -1,9 +1,7 @@
 package handler
 
 import (
-	"archive/tar"
-	"archive/zip"
-	"compress/gzip"
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -725,51 +723,53 @@ func (h *Handler) BatchDownload(c *gin.Context) {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-	c.Header("Content-Disposition", `attachment; filename="download.zip"`)
-	c.Header("Content-Type", "application/zip")
-	zw := zip.NewWriter(c.Writer)
-	defer zw.Close()
+
+	// 创建临时文件存放 zip 包
+	tmp, err := os.CreateTemp("", "cloudone-batch-*.zip")
+	if err != nil {
+		c.JSON(500, gin.H{"error": "failed to create temp file: " + err.Error()})
+		return
+	}
+	tmpPath := tmp.Name()
+	tmp.Close()
+	// 函数退出时删除临时文件，不管成功还是失败
+	defer os.Remove(tmpPath)
+
+	// 把逻辑路径转为相对于 storage root 的相对路径
+	storageRoot := h.files.Root()
+	var relArgs []string
 	for _, rel := range req.Paths {
 		abs, err := h.files.SafeAbsPath(rel)
 		if err != nil {
 			continue
 		}
-		info, err := os.Stat(abs)
+		relToRoot, err := filepath.Rel(storageRoot, abs)
 		if err != nil {
 			continue
 		}
-		baseName := filepath.Base(abs)
-		if info.IsDir() {
-			_ = filepath.Walk(abs, func(path string, fi os.FileInfo, werr error) error {
-				if werr != nil || fi.IsDir() {
-					return nil
-				}
-				relInZip := filepath.ToSlash(baseName + "/" + strings.TrimPrefix(path, abs+string(os.PathSeparator)))
-				w, err := zw.Create(relInZip)
-				if err != nil {
-					return nil
-				}
-				f, err := os.Open(path)
-				if err != nil {
-					return nil
-				}
-				_, _ = io.Copy(w, f)
-				f.Close()
-				return nil
-			})
-		} else {
-			w, err := zw.Create(baseName)
-			if err != nil {
-				continue
-			}
-			f, err := os.Open(abs)
-			if err != nil {
-				continue
-			}
-			_, _ = io.Copy(w, f)
-			f.Close()
-		}
+		relArgs = append(relArgs, relToRoot)
 	}
+	if len(relArgs) == 0 {
+		c.JSON(400, gin.H{"error": "no valid paths"})
+		return
+	}
+
+	// 子进程压缩：完成后子进程退出，内存立刻回收
+	args := append([]string{"-r", tmpPath}, relArgs...)
+	cmd := exec.Command("zip", args...)
+	cmd.Dir = storageRoot
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	cmd.Stdout = io.Discard
+	if err := cmd.Run(); err != nil {
+		c.JSON(500, gin.H{"error": "compress failed: " + stderr.String()})
+		return
+	}
+
+	// 子进程已退出，压缩内存已回收，直接流式发送临时文件
+	c.Header("Content-Disposition", `attachment; filename="download.zip"`)
+	c.Header("Content-Type", "application/zip")
+	c.File(tmpPath)
 }
 
 func (h *Handler) BatchMove(c *gin.Context) {
@@ -992,11 +992,6 @@ func (h *Handler) AccessShare(c *gin.Context) {
 
 // ── 压缩/解压 ─────────────────────────────────────────────────────────────────
 
-const (
-	maxDecompressFileSize  = 500 * 1024 * 1024 // 单文件 500MB
-	maxDecompressFileCount = 10000              // 最多 10000 个文件
-)
-
 func (h *Handler) CompressFiles(c *gin.Context) {
 	var req struct {
 		Paths  []string `json:"paths" binding:"required"`
@@ -1043,110 +1038,51 @@ func (h *Handler) CompressFiles(c *gin.Context) {
 		return
 	}
 
-	// 流式压缩：不预先收集所有 entry，逐文件写入，避免大目录时内存暴涨
-	addToZip := func(zw *zip.Writer, absPath, relPath string) error {
-		src, err := os.Open(absPath)
+	// 把每个逻辑路径转为相对于 storage root 的相对路径，
+	// 命令从 root 目录执行，压缩包内只保留 basename 起的相对路径，不含绝对路径。
+	storageRoot := h.files.Root()
+	var relArgs []string
+	for _, rel := range req.Paths {
+		abs, err := h.files.AbsPath(rel)
 		if err != nil {
-			return nil // 跳过无法打开的文件
+			continue
 		}
-		defer src.Close()
-		w, err := zw.Create(relPath)
+		// 转为相对于 storageRoot 的路径，作为命令参数
+		relToRoot, err := filepath.Rel(storageRoot, abs)
 		if err != nil {
-			return nil
+			continue
 		}
-		_, _ = io.Copy(w, src)
-		return nil
+		relArgs = append(relArgs, relToRoot)
 	}
-	addToTar := func(tw *tar.Writer, absPath, relPath string) error {
-		info, err := os.Stat(absPath)
-		if err != nil {
-			return nil
-		}
-		hdr, err := tar.FileInfoHeader(info, "")
-		if err != nil {
-			return nil
-		}
-		hdr.Name = relPath
-		tw.WriteHeader(hdr)
-		src, err := os.Open(absPath)
-		if err != nil {
-			return nil
-		}
-		defer src.Close()
-		_, _ = io.Copy(tw, src)
-		return nil
-	}
-
-	f, err := os.Create(outAbs)
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+	if len(relArgs) == 0 {
+		c.JSON(400, gin.H{"error": "no valid paths"})
 		return
 	}
 
-	var writeErr error
+	var cmd *exec.Cmd
 	switch req.Format {
 	case "zip":
-		zw := zip.NewWriter(f)
-		for _, rel := range req.Paths {
-			abs, err := h.files.AbsPath(rel)
-			if err != nil {
-				continue
-			}
-			info, err := os.Stat(abs)
-			if err != nil {
-				continue
-			}
-			baseName := filepath.Base(abs)
-			if info.IsDir() {
-				filepath.Walk(abs, func(path string, fi os.FileInfo, werr error) error {
-					if werr != nil || fi.IsDir() {
-						return nil
-					}
-					relPath := baseName + "/" + strings.TrimPrefix(filepath.ToSlash(path), filepath.ToSlash(abs)+"/")
-					return addToZip(zw, path, relPath)
-				})
-			} else {
-				addToZip(zw, abs, baseName)
-			}
-		}
-		zw.Close()
-	case "tar", "tar.gz":
-		var tw *tar.Writer
-		if req.Format == "tar.gz" {
-			gw := gzip.NewWriter(f)
-			tw = tar.NewWriter(gw)
-			defer gw.Close()
-		} else {
-			tw = tar.NewWriter(f)
-		}
-		for _, rel := range req.Paths {
-			abs, err := h.files.AbsPath(rel)
-			if err != nil {
-				continue
-			}
-			info, err := os.Stat(abs)
-			if err != nil {
-				continue
-			}
-			baseName := filepath.Base(abs)
-			if info.IsDir() {
-				filepath.Walk(abs, func(path string, fi os.FileInfo, werr error) error {
-					if werr != nil || fi.IsDir() {
-						return nil
-					}
-					relPath := baseName + "/" + strings.TrimPrefix(filepath.ToSlash(path), filepath.ToSlash(abs)+"/")
-					return addToTar(tw, path, relPath)
-				})
-			} else {
-				addToTar(tw, abs, baseName)
-			}
-		}
-		tw.Close()
+		// zip -r output.zip file1 dir2 ...  （从 storageRoot 执行）
+		args := append([]string{"-r", outAbs}, relArgs...)
+		cmd = exec.Command("zip", args...)
+	case "tar.gz":
+		// tar -czf output.tar.gz file1 dir2 ...
+		args := append([]string{"-czf", outAbs}, relArgs...)
+		cmd = exec.Command("tar", args...)
+	case "tar":
+		// tar -cf output.tar file1 dir2 ...
+		args := append([]string{"-cf", outAbs}, relArgs...)
+		cmd = exec.Command("tar", args...)
 	}
 
-	f.Close()
-	if writeErr != nil {
-		c.JSON(500, gin.H{"error": writeErr.Error()})
+	// 关键：从 storageRoot 执行，保证压缩包内路径是相对路径
+	cmd.Dir = storageRoot
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	cmd.Stdout = io.Discard
+
+	if err := cmd.Run(); err != nil {
+		c.JSON(500, gin.H{"error": "compress failed: " + stderr.String()})
 		return
 	}
 	c.JSON(200, gin.H{"ok": true, "output": req.Output})
@@ -1188,157 +1124,38 @@ func (h *Handler) DecompressFile(c *gin.Context) {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
+
 	name := strings.ToLower(filepath.Base(absPath))
+	var cmd *exec.Cmd
 	switch {
 	case strings.HasSuffix(name, ".tar.gz") || strings.HasSuffix(name, ".tgz"):
-		err = extractTarGz(absPath, absDestDir)
+		// tar -xzf file.tar.gz -C destdir
+		cmd = exec.Command("tar", "-xzf", absPath, "-C", absDestDir)
 	case strings.HasSuffix(name, ".tar"):
-		err = extractTar(absPath, absDestDir)
+		// tar -xf file.tar -C destdir
+		cmd = exec.Command("tar", "-xf", absPath, "-C", absDestDir)
 	case strings.HasSuffix(name, ".gz"):
-		err = extractGz(absPath, absDestDir)
+		// gzip -dk file.gz 解压到原目录，再 mv 到目标目录
+		// 直接用 gzip -c -d 输出到目标文件，不占主进程内存
+		outName := strings.TrimSuffix(filepath.Base(absPath), ".gz")
+		outPath := filepath.Join(absDestDir, outName)
+		cmd = exec.Command("sh", "-c", fmt.Sprintf("gzip -c -d %q > %q", absPath, outPath))
 	case strings.HasSuffix(name, ".zip"):
-		err = extractZip(absPath, absDestDir)
+		// unzip -o file.zip -d destdir
+		cmd = exec.Command("unzip", "-o", absPath, "-d", absDestDir)
 	default:
 		c.JSON(400, gin.H{"error": "unsupported archive format"})
 		return
 	}
-	if err != nil {
-		c.JSON(500, gin.H{"error": "decompress failed: " + err.Error()})
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	cmd.Stdout = io.Discard
+	if err := cmd.Run(); err != nil {
+		c.JSON(500, gin.H{"error": "decompress failed: " + stderr.String()})
 		return
 	}
 	c.JSON(200, gin.H{"ok": true})
-}
-
-func extractZip(src, dest string) error {
-	r, err := zip.OpenReader(src)
-	if err != nil {
-		return err
-	}
-	defer r.Close()
-	if len(r.File) > maxDecompressFileCount {
-		return fmt.Errorf("too many files in archive: %d", len(r.File))
-	}
-	destClean := filepath.Clean(dest) + string(os.PathSeparator)
-	for _, f := range r.File {
-		if f.UncompressedSize64 > maxDecompressFileSize {
-			return fmt.Errorf("file %s is too large (%d bytes)", f.Name, f.UncompressedSize64)
-		}
-		fpath := filepath.Join(dest, filepath.FromSlash(f.Name))
-		if !strings.HasPrefix(fpath, destClean) {
-			continue
-		}
-		if f.FileInfo().IsDir() {
-			os.MkdirAll(fpath, 0755)
-			continue
-		}
-		if err := os.MkdirAll(filepath.Dir(fpath), 0755); err != nil {
-			return err
-		}
-		rc, err := f.Open()
-		if err != nil {
-			return err
-		}
-		out, err := os.Create(fpath)
-		if err != nil {
-			rc.Close()
-			return err
-		}
-		_, err = io.Copy(out, io.LimitReader(rc, maxDecompressFileSize))
-		out.Close()
-		rc.Close()
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func extractTar(src, dest string) error {
-	f, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	return untar(f, dest)
-}
-
-func extractTarGz(src, dest string) error {
-	f, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	gr, err := gzip.NewReader(f)
-	if err != nil {
-		return err
-	}
-	defer gr.Close()
-	return untar(gr, dest)
-}
-
-func extractGz(src, dest string) error {
-	f, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	gr, err := gzip.NewReader(f)
-	if err != nil {
-		return err
-	}
-	defer gr.Close()
-	outName := strings.TrimSuffix(filepath.Base(src), ".gz")
-	out, err := os.Create(filepath.Join(dest, outName))
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-	_, err = io.Copy(out, gr)
-	return err
-}
-
-func untar(r io.Reader, dest string) error {
-	tr := tar.NewReader(r)
-	destClean := filepath.Clean(dest) + string(os.PathSeparator)
-	fileCount := 0
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
-		fileCount++
-		if fileCount > maxDecompressFileCount {
-			return fmt.Errorf("too many files in archive")
-		}
-		fpath := filepath.Join(dest, filepath.FromSlash(hdr.Name))
-		if !strings.HasPrefix(fpath, destClean) {
-			continue
-		}
-		switch hdr.Typeflag {
-		case tar.TypeDir:
-			os.MkdirAll(fpath, 0755)
-		case tar.TypeReg:
-			if hdr.Size > maxDecompressFileSize {
-				return fmt.Errorf("file %s is too large", hdr.Name)
-			}
-			if err := os.MkdirAll(filepath.Dir(fpath), 0755); err != nil {
-				return err
-			}
-			out, err := os.Create(fpath)
-			if err != nil {
-				return err
-			}
-			_, err = io.Copy(out, io.LimitReader(tr, maxDecompressFileSize))
-			out.Close()
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 // ── FetchURL（SSRF 防护加强版）────────────────────────────────────────────────
@@ -1380,33 +1197,29 @@ func (h *Handler) FetchURL(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "neither wget nor curl is available on this system"})
 		return
 	}
-	// 限制最大下载大小：500MB，防止下载超大文件耗尽磁盘/内存
-	const maxFetchBytes = 500 * 1024 * 1024 // 500MB
 	var cmd *exec.Cmd
 	outPath := filepath.Join(absDir, req.Filename)
 	if req.Filename != "" {
 		if hasWget {
-			cmd = exec.Command("wget", "-q", "--max-redirect=5",
-				fmt.Sprintf("--quota=%d", maxFetchBytes),
-				"-O", outPath, req.URL)
+			cmd = exec.Command("wget", "-q", "-O", outPath, req.URL)
 		} else {
-			cmd = exec.Command("curl", "-L", "--max-filesize", fmt.Sprintf("%d", maxFetchBytes),
-				"-o", outPath, req.URL)
+			cmd = exec.Command("curl", "-L", "-o", outPath, req.URL)
 		}
 	} else {
 		if hasWget {
-			cmd = exec.Command("wget", "-q", "--max-redirect=5",
-				fmt.Sprintf("--quota=%d", maxFetchBytes),
-				"-P", absDir, req.URL)
+			cmd = exec.Command("wget", "-q", "-P", absDir, req.URL)
 		} else {
-			cmd = exec.Command("curl", "-L", "--max-filesize", fmt.Sprintf("%d", maxFetchBytes),
-				"--output-dir", absDir, "-O", req.URL)
+			cmd = exec.Command("curl", "-L", "--output-dir", absDir, "-O", req.URL)
 		}
 	}
 	cmd.Dir = absDir
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		c.JSON(500, gin.H{"error": "fetch failed: " + err.Error() + " | " + string(out)})
+	// 用 Run() 而非 CombinedOutput()：后者会把 stdout/stderr 全量读入内存 buffer。
+	// wget/curl 下载文件时 stdout 可能就是文件内容本身（未指定 -O 时），
+	// 用 Run() + 丢弃 stdout/stderr 可避免大文件被意外吸入内存。
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
+	if err := cmd.Run(); err != nil {
+		c.JSON(500, gin.H{"error": "fetch failed: " + err.Error()})
 		return
 	}
 	c.JSON(200, gin.H{"ok": true})
