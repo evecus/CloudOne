@@ -1042,59 +1042,75 @@ func (h *Handler) CompressFiles(c *gin.Context) {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	type entry struct{ abs, rel string }
-	var entries []entry
-	for _, rel := range req.Paths {
-		abs, err := h.files.AbsPath(rel)
+
+	// 流式压缩：不预先收集所有 entry，逐文件写入，避免大目录时内存暴涨
+	addToZip := func(zw *zip.Writer, absPath, relPath string) error {
+		src, err := os.Open(absPath)
 		if err != nil {
-			continue
+			return nil // 跳过无法打开的文件
 		}
-		info, err := os.Stat(abs)
+		defer src.Close()
+		w, err := zw.Create(relPath)
 		if err != nil {
-			continue
+			return nil
 		}
-		baseName := filepath.Base(abs)
-		if info.IsDir() {
-			filepath.Walk(abs, func(path string, fi os.FileInfo, werr error) error {
-				if werr != nil || fi.IsDir() {
-					return nil
-				}
-				relPath := baseName + "/" + strings.TrimPrefix(filepath.ToSlash(path), filepath.ToSlash(abs)+"/")
-				entries = append(entries, entry{abs: path, rel: relPath})
-				return nil
-			})
-		} else {
-			entries = append(entries, entry{abs: abs, rel: baseName})
-		}
+		_, _ = io.Copy(w, src)
+		return nil
 	}
+	addToTar := func(tw *tar.Writer, absPath, relPath string) error {
+		info, err := os.Stat(absPath)
+		if err != nil {
+			return nil
+		}
+		hdr, err := tar.FileInfoHeader(info, "")
+		if err != nil {
+			return nil
+		}
+		hdr.Name = relPath
+		tw.WriteHeader(hdr)
+		src, err := os.Open(absPath)
+		if err != nil {
+			return nil
+		}
+		defer src.Close()
+		_, _ = io.Copy(tw, src)
+		return nil
+	}
+
+	f, err := os.Create(outAbs)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	var writeErr error
 	switch req.Format {
 	case "zip":
-		f, err := os.Create(outAbs)
-		if err != nil {
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
-		}
 		zw := zip.NewWriter(f)
-		for _, e := range entries {
-			w, err := zw.Create(e.rel)
+		for _, rel := range req.Paths {
+			abs, err := h.files.AbsPath(rel)
 			if err != nil {
 				continue
 			}
-			src, err := os.Open(e.abs)
+			info, err := os.Stat(abs)
 			if err != nil {
 				continue
 			}
-			io.Copy(w, src)
-			src.Close()
+			baseName := filepath.Base(abs)
+			if info.IsDir() {
+				filepath.Walk(abs, func(path string, fi os.FileInfo, werr error) error {
+					if werr != nil || fi.IsDir() {
+						return nil
+					}
+					relPath := baseName + "/" + strings.TrimPrefix(filepath.ToSlash(path), filepath.ToSlash(abs)+"/")
+					return addToZip(zw, path, relPath)
+				})
+			} else {
+				addToZip(zw, abs, baseName)
+			}
 		}
 		zw.Close()
-		f.Close()
 	case "tar", "tar.gz":
-		f, err := os.Create(outAbs)
-		if err != nil {
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
-		}
 		var tw *tar.Writer
 		if req.Format == "tar.gz" {
 			gw := gzip.NewWriter(f)
@@ -1103,26 +1119,35 @@ func (h *Handler) CompressFiles(c *gin.Context) {
 		} else {
 			tw = tar.NewWriter(f)
 		}
-		for _, e := range entries {
-			info, err := os.Stat(e.abs)
+		for _, rel := range req.Paths {
+			abs, err := h.files.AbsPath(rel)
 			if err != nil {
 				continue
 			}
-			hdr, err := tar.FileInfoHeader(info, "")
+			info, err := os.Stat(abs)
 			if err != nil {
 				continue
 			}
-			hdr.Name = e.rel
-			tw.WriteHeader(hdr)
-			src, err := os.Open(e.abs)
-			if err != nil {
-				continue
+			baseName := filepath.Base(abs)
+			if info.IsDir() {
+				filepath.Walk(abs, func(path string, fi os.FileInfo, werr error) error {
+					if werr != nil || fi.IsDir() {
+						return nil
+					}
+					relPath := baseName + "/" + strings.TrimPrefix(filepath.ToSlash(path), filepath.ToSlash(abs)+"/")
+					return addToTar(tw, path, relPath)
+				})
+			} else {
+				addToTar(tw, abs, baseName)
 			}
-			io.Copy(tw, src)
-			src.Close()
 		}
 		tw.Close()
-		f.Close()
+	}
+
+	f.Close()
+	if writeErr != nil {
+		c.JSON(500, gin.H{"error": writeErr.Error()})
+		return
 	}
 	c.JSON(200, gin.H{"ok": true, "output": req.Output})
 }
@@ -1355,19 +1380,27 @@ func (h *Handler) FetchURL(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "neither wget nor curl is available on this system"})
 		return
 	}
+	// 限制最大下载大小：500MB，防止下载超大文件耗尽磁盘/内存
+	const maxFetchBytes = 500 * 1024 * 1024 // 500MB
 	var cmd *exec.Cmd
 	outPath := filepath.Join(absDir, req.Filename)
 	if req.Filename != "" {
 		if hasWget {
-			cmd = exec.Command("wget", "-q", "-O", outPath, req.URL)
+			cmd = exec.Command("wget", "-q", "--max-redirect=5",
+				fmt.Sprintf("--quota=%d", maxFetchBytes),
+				"-O", outPath, req.URL)
 		} else {
-			cmd = exec.Command("curl", "-L", "-o", outPath, req.URL)
+			cmd = exec.Command("curl", "-L", "--max-filesize", fmt.Sprintf("%d", maxFetchBytes),
+				"-o", outPath, req.URL)
 		}
 	} else {
 		if hasWget {
-			cmd = exec.Command("wget", "-q", "-P", absDir, req.URL)
+			cmd = exec.Command("wget", "-q", "--max-redirect=5",
+				fmt.Sprintf("--quota=%d", maxFetchBytes),
+				"-P", absDir, req.URL)
 		} else {
-			cmd = exec.Command("curl", "-L", "--output-dir", absDir, "-O", req.URL)
+			cmd = exec.Command("curl", "-L", "--max-filesize", fmt.Sprintf("%d", maxFetchBytes),
+				"--output-dir", absDir, "-O", req.URL)
 		}
 	}
 	cmd.Dir = absDir
