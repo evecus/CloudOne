@@ -42,17 +42,15 @@ jobs:
         env:
           GOOS: linux
           GOARCH: amd64
-          CGO_ENABLED: 1
+          CGO_ENABLED: 0
         run: go build -ldflags="-s -w" -o cloudone-linux-amd64 .
 
       - name: Build for Linux arm64
         env:
           GOOS: linux
           GOARCH: arm64
-          CGO_ENABLED: 1
-          CC: aarch64-linux-gnu-gcc
+          CGO_ENABLED: 0
         run: |
-          sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
           go build -ldflags="-s -w" -o cloudone-linux-arm64 .
 
       - name: Upload artifacts
