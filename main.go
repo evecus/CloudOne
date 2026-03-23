@@ -45,42 +45,59 @@ func init() {
 
 func main() {
 	// ── 内存管理配置 ──────────────────────────────────────────────────────────
-	// 设置更激进的 GC 触发比例（默认100，改为50意味着堆增长50%就触发GC）
-	// 可通过环境变量 GOGC 覆盖（如 GOGC=100 恢复默认）
 	if os.Getenv("GOGC") == "" {
 		debug.SetGCPercent(50)
 	}
-	// 软内存上限：超过此值时 GC 会更频繁运行并积极归还内存给 OS。
-	// 默认 512MB，可通过环境变量 GOMEMLIMIT 覆盖（如 GOMEMLIMIT=1GiB）
 	if os.Getenv("GOMEMLIMIT") == "" {
 		debug.SetMemoryLimit(512 << 20) // 512 MiB
 	}
 
-	var dataDir string
-	flag.StringVar(&dataDir, "dir", "./data", "数据目录路径，例如 --dir /etc/cloudone/data")
+	// ── 命令行参数解析 ────────────────────────────────────────────────────────
+	var configFlag string
+	var dirFlag string
+	flag.StringVar(&configFlag, "config", "", "数据配置目录 (存放 db, keys, conf.ini)")
+	flag.StringVar(&dirFlag, "dir", "", "文件存储目录 (存放用户上传的文件)")
 	flag.Parse()
 
+	var dataDir string
+	var storageDir string
+
+	// 逻辑判断：按照用户要求的优先级设定目录
+	if configFlag != "" && dirFlag != "" {
+		dataDir = configFlag
+		storageDir = dirFlag
+	} else if configFlag != "" && dirFlag == "" {
+		dataDir = configFlag
+		storageDir = filepath.Join(configFlag, "storage")
+	} else if configFlag == "" && dirFlag != "" {
+		dataDir = "./data"
+		storageDir = dirFlag
+	} else {
+		dataDir = "./data"
+		storageDir = filepath.Join(dataDir, "storage")
+	}
+
+	// 创建必要的目录
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		log.Fatal("Failed to create data directory:", err)
 	}
+	// 预创建存储目录（如果不存在）
+	if err := os.MkdirAll(storageDir, 0755); err != nil {
+		log.Fatal("Failed to create initial storage directory:", err)
+	}
 
-	confPath := dataDir + "/conf.ini"
+	// ── 配置文件与数据库 ──────────────────────────────────────────────────────
+	confPath := filepath.Join(dataDir, "conf.ini")
 	cfg, err := config.Load(confPath)
 	if err != nil {
 		log.Fatal("Failed to load config:", err)
 	}
 
-	// ── Master Key ──────────────────────────────────────────────────────────
-	// 用于加密数据库中的敏感字段（JWT Secret、WebDAV 密码哈希等）。
-	// 优先从环境变量 CLOUDONE_MASTER_KEY 读取（生产环境推荐）。
-	// 若未设置，自动生成并持久化到 data/master.key（权限 0600）。
-	// 注意：master.key 丢失将导致所有加密数据无法解密，请妥善备份。
-	masterKeyPath := dataDir + "/master.key"
+	masterKeyPath := filepath.Join(dataDir, "master.key")
 	masterKey := os.Getenv("CLOUDONE_MASTER_KEY")
 	if masterKey == "" {
 		raw, err := os.ReadFile(masterKeyPath)
 		if err != nil {
-			// 首次启动：生成随机 master key
 			b := make([]byte, 32)
 			if _, err := rand.Read(b); err != nil {
 				log.Fatal("Failed to generate master key:", err)
@@ -94,33 +111,40 @@ func main() {
 			masterKey = string(raw)
 		}
 	}
-	// 注入到 auth 包，所有加解密操作均使用此密钥
 	auth.SetMasterKey(masterKey)
 
-	// ── 数据库 ───────────────────────────────────────────────────────────────
-	db, err := auth.InitDB(dataDir + "/cloudone.db")
+	db, err := auth.InitDB(filepath.Join(dataDir, "cloudone.db"))
 	if err != nil {
 		log.Fatal("Failed to init DB:", err)
 	}
 
-	// ── 存储目录 ─────────────────────────────────────────────────────────────
+	// ── 确定最终存储目录 ──────────────────────────────────────────────────────
 	var settings auth.Settings
 	db.First(&settings)
 
-	storageDir := settings.StorageDir
-	if storageDir == "" {
-		storageDir = dataDir + "/storage"
+	// 如果命令行明确指定了 --dir，则强制覆盖数据库中的设置并更新数据库
+	if dirFlag != "" {
+		storageDir = dirFlag
+		if settings.StorageDir != storageDir {
+			settings.StorageDir = storageDir
+			db.Save(&settings)
+			log.Println("Storage directory updated from command line:", storageDir)
+		}
+	} else if settings.StorageDir != "" {
+		// 如果命令行没指明，且数据库里有旧记录，则沿用数据库的
+		storageDir = settings.StorageDir
 	}
+
+	// 再次确保最终确定的存储目录存在
 	if err := os.MkdirAll(storageDir, 0755); err != nil {
-		log.Fatal("Failed to create storage directory:", err)
+		log.Fatal("Failed to ensure storage directory:", err)
 	}
+	log.Println("Data directory:", dataDir)
 	log.Println("Storage directory:", storageDir)
 
-	// ── JWT Secret ───────────────────────────────────────────────────────────
-	// 优先从环境变量读取；否则从加密数据库读取；首次启动自动生成并加密存储。
+	// ── JWT Secret ──────────────────────────────────────────────────────────
 	jwtSecret := os.Getenv("CLOUDONE_JWT_SECRET")
 	if jwtSecret == "" {
-		// 从数据库解密读取
 		secret, err := settings.GetJWTSecret()
 		if err != nil {
 			log.Println("Warning: failed to decrypt JWT secret, regenerating:", err)
@@ -128,7 +152,6 @@ func main() {
 		jwtSecret = secret
 	}
 	if jwtSecret == "" {
-		// 首次启动：生成随机 JWT secret，加密后存入 DB
 		b := make([]byte, 32)
 		if _, err := rand.Read(b); err != nil {
 			log.Fatal("Failed to generate JWT secret:", err)
@@ -142,7 +165,6 @@ func main() {
 	}
 	handler.SetJWTSecret(jwtSecret)
 
-	// ── conf.ini 只保存 host/port ────────────────────────────────────────────
 	if err := config.Save(confPath, cfg); err != nil {
 		log.Println("Warning: could not write conf.ini:", err)
 	}
@@ -157,12 +179,10 @@ func main() {
 	r.RedirectTrailingSlash = false
 	r.RedirectFixedPath = false
 
-	// CORS：限制为同源，生产环境可通过环境变量 CLOUDONE_ORIGIN 指定允许的来源
 	allowedOrigin := os.Getenv("CLOUDONE_ORIGIN")
 	r.Use(cors.New(cors.Config{
 		AllowOriginFunc: func(origin string) bool {
 			if allowedOrigin == "" {
-				// 未配置时：仅允许同源（空 origin 或与服务器地址相同）
 				return origin == "" || origin == "null"
 			}
 			return origin == allowedOrigin
@@ -225,21 +245,19 @@ func main() {
 		api.GET("/s/:code/download", h.DownloadShare)
 	}
 
-	// WebDAV 协议路由
 	davMethods := []string{"GET", "HEAD", "PUT", "DELETE", "OPTIONS", "PROPFIND", "PROPPATCH", "MKCOL", "COPY", "MOVE", "LOCK", "UNLOCK"}
 	for _, method := range davMethods {
 		r.Handle(method, "/dav", h.WebDAVMiddleware(), h.WebDAVHandler)
 		r.Handle(method, "/dav/*path", h.WebDAVMiddleware(), h.WebDAVHandler)
 	}
 
-	// 公开文件 API
 	r.GET("/public", h.ListPublicFiles)
 	r.GET("/pub/list", h.ListPublicFilesOpen)
 	r.GET("/pub/dl", h.DownloadPublicFile)
 	r.GET("/raw/*path", h.ServePublicFile)
 	r.GET("/s/:code/raw", h.ServeRaw)
 
-	// 前端静态文件
+	// 前端静态文件处理
 	sub, err := fs.Sub(frontendFS, "frontend/dist")
 	if err != nil {
 		log.Fatal(err)
