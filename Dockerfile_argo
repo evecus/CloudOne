@@ -33,8 +33,5 @@ RUN chmod +x /app/cloudone
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
-# 暴露端口
-EXPOSE 6677
-
 # 使用脚本启动
 ENTRYPOINT ["/app/entrypoint.sh"]
