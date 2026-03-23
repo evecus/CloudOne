@@ -9,6 +9,6 @@ require (
 	github.com/google/uuid v1.6.0
 	golang.org/x/crypto v0.21.0
 	golang.org/x/time v0.5.0
-	gorm.io/driver/sqlite v1.5.5
+	github.com/glebarez/sqlite v1.11.0
 	gorm.io/gorm v1.25.7
 )
