@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"embed"
 	"encoding/hex"
+	"flag"
 	"io/fs"
 	"log"
 	"mime"
@@ -55,7 +56,10 @@ func main() {
 		debug.SetMemoryLimit(512 << 20) // 512 MiB
 	}
 
-	dataDir := "./data"
+	var dataDir string
+	flag.StringVar(&dataDir, "dir", "./data", "数据目录路径，例如 --dir /etc/cloudone/data")
+	flag.Parse()
+
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		log.Fatal("Failed to create data directory:", err)
 	}
