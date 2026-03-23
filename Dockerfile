@@ -17,9 +17,8 @@ RUN apk add --no-cache \
 # 创建数据存储目录
 RUN mkdir -p /app/data
 
-# 将 Github Actions 构建好的二进制文件复制到容器内
-# 注意：文件名需与你 workflow 中编译输出的文件名一致
-# 如果你是通过构建多架构镜像，buildx 会自动处理 context
+ARG TARGETARCH
+
 COPY cloudone-linux-${TARGETARCH} /app/cloudone
 
 # 赋予执行权限
