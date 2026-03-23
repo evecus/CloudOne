@@ -1,0 +1,40 @@
+# 使用轻量级的 Alpine Linux 作为基础镜像
+FROM alpine:latest
+
+# 设置工作目录
+WORKDIR /app
+
+# 安装必要的运行时依赖
+RUN apk add --no-cache \
+    curl \
+    ca-certificates \
+    tzdata \
+    libc6-compat
+
+# 设置环境变量默认值
+ENV CF=false
+ENV TOKEN=""
+
+ARG TARGETARCH
+
+# 1. 下载并安装 cloudflared 二进制文件
+# 根据构建架构 (amd64/arm64) 自动选择下载链接
+RUN if [ "$TARGETARCH" = "amd64" ]; then \
+        curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /app/cloudflared; \
+    elif [ "$TARGETARCH" = "arm64" ]; then \
+        curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64 -o /app/cloudflared; \
+    fi && chmod +x /app/cloudflared
+
+# 2. 复制你的主程序
+COPY cloudone-linux-${TARGETARCH} /app/cloudone
+RUN chmod +x /app/cloudone
+
+# 3. 复制并设置启动脚本
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+# 暴露端口
+EXPOSE 6677
+
+# 使用脚本启动
+ENTRYPOINT ["/app/entrypoint.sh"]
