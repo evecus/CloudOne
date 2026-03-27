@@ -2,19 +2,23 @@ name: 构建正式版本
 
 on:
   workflow_dispatch:
-    inputs:
-      tag:
-        description: '发布版本号，例如 v1.2.0'
-        required: true
-        default: 'v1.1.0'
+    # 保留手动输入作为备选，但我们将默认使用时间戳
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    outputs:
+      release_tag: ${{ steps.set_tag.outputs.tag }} # 将生成的标签传递给下一个 Job
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set Release Tag
+        id: set_tag
+        run: |
+          # 生成格式如 2026.03.27-0640 的时间戳
+          TAG_NAME=$(date +'%Y.%m.%d-%H%M')
+          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -38,21 +42,13 @@ jobs:
           go mod tidy
           go mod download
 
-      - name: Build for Linux amd64
-        env:
-          GOOS: linux
-          GOARCH: amd64
-          CGO_ENABLED: 1
-        run: go build -ldflags="-s -w" -o cloudone-linux-amd64 .
-
       - name: Build for Linux arm64
         env:
           GOOS: linux
           GOARCH: arm64
-          CGO_ENABLED: 1
+          CGO_ENABLED: 0
           CC: aarch64-linux-gnu-gcc
         run: |
-          sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
           go build -ldflags="-s -w" -o cloudone-linux-arm64 .
 
       - name: Upload artifacts
@@ -60,7 +56,6 @@ jobs:
         with:
           name: cloudone-binaries
           path: |
-            cloudone-linux-amd64
             cloudone-linux-arm64
 
   release:
@@ -75,14 +70,16 @@ jobs:
         with:
           name: cloudone-binaries
 
-      - name: Create Release
+      - name: Create Pre-release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.tag }}
-          name: CloudOne ${{ github.event.inputs.tag }}
+          # 使用从 build job 传过来的时间戳标签
+          tag_name: ${{ needs.build.outputs.release_tag }}
+          name: CloudOne Pre-release ${{ needs.build.outputs.release_tag }}
+          draft: false
+          prerelease: true # 设置为预发布版本
           generate_release_notes: true
           files: |
-            cloudone-linux-amd64
             cloudone-linux-arm64
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
