@@ -720,7 +720,8 @@ func (h *Handler) BatchDelete(c *gin.Context) {
 
 func (h *Handler) BatchDownload(c *gin.Context) {
 	var req struct {
-		Paths []string `json:"paths" binding:"required"`
+		Paths    []string `json:"paths" binding:"required"`
+		Filename string   `json:"filename"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
@@ -769,8 +770,16 @@ func (h *Handler) BatchDownload(c *gin.Context) {
 		return
 	}
 
+	// 确定下载文件名
+	zipName := req.Filename
+	if zipName == "" {
+		zipName = "download"
+	}
+	if !strings.HasSuffix(strings.ToLower(zipName), ".zip") {
+		zipName += ".zip"
+	}
 	// 子进程已退出，压缩内存已回收，直接流式发送临时文件
-	c.Header("Content-Disposition", `attachment; filename="download.zip"`)
+	c.Header("Content-Disposition", `attachment; filename="`+zipName+`"`)
 	c.Header("Content-Type", "application/zip")
 	c.File(tmpPath)
 }
