@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"archive/zip"
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
@@ -728,20 +729,22 @@ func (h *Handler) BatchDownload(c *gin.Context) {
 		return
 	}
 
-	// 创建临时文件存放 zip 包
-	tmp, err := os.CreateTemp("", "cloudone-batch-*.zip")
-	if err != nil {
-		c.JSON(500, gin.H{"error": "failed to create temp file: " + err.Error()})
-		return
+	// 确定下载文件名
+	zipName := req.Filename
+	if zipName == "" {
+		zipName = "download"
 	}
-	tmpPath := tmp.Name()
-	tmp.Close()
-	// 函数退出时删除临时文件，不管成功还是失败
-	defer os.Remove(tmpPath)
+	if !strings.HasSuffix(strings.ToLower(zipName), ".zip") {
+		zipName += ".zip"
+	}
 
-	// 把逻辑路径转为相对于 storage root 的相对路径
+	// 收集所有有效的绝对路径
 	storageRoot := h.files.Root()
-	var relArgs []string
+	type entry struct {
+		abs     string
+		relRoot string // 相对于 storageRoot 的路径，用作 zip 内路径前缀
+	}
+	var entries []entry
 	for _, rel := range req.Paths {
 		abs, err := h.files.SafeAbsPath(rel)
 		if err != nil {
@@ -751,37 +754,65 @@ func (h *Handler) BatchDownload(c *gin.Context) {
 		if err != nil {
 			continue
 		}
-		relArgs = append(relArgs, relToRoot)
+		entries = append(entries, entry{abs: abs, relRoot: relToRoot})
 	}
-	if len(relArgs) == 0 {
+	if len(entries) == 0 {
 		c.JSON(400, gin.H{"error": "no valid paths"})
 		return
 	}
 
-	// 子进程压缩：完成后子进程退出，内存立刻回收
-	args := append([]string{"-r", tmpPath}, relArgs...)
-	cmd := exec.Command("zip", args...)
-	cmd.Dir = storageRoot
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	cmd.Stdout = io.Discard
-	if err := cmd.Run(); err != nil {
-		c.JSON(500, gin.H{"error": "compress failed: " + stderr.String()})
-		return
-	}
-
-	// 确定下载文件名
-	zipName := req.Filename
-	if zipName == "" {
-		zipName = "download"
-	}
-	if !strings.HasSuffix(strings.ToLower(zipName), ".zip") {
-		zipName += ".zip"
-	}
-	// 子进程已退出，压缩内存已回收，直接流式发送临时文件
+	// 使用 Go 标准库直接流式写入响应，无需外部 zip 命令，无需临时文件
 	c.Header("Content-Disposition", `attachment; filename="`+zipName+`"`)
 	c.Header("Content-Type", "application/zip")
-	c.File(tmpPath)
+	c.Status(200)
+
+	zw := zip.NewWriter(c.Writer)
+	defer zw.Close()
+
+	// addToZip 递归把文件/目录写入 zip
+	var addToZip func(absPath, zipPrefix string) error
+	addToZip = func(absPath, zipPrefix string) error {
+		info, err := os.Lstat(absPath)
+		if err != nil {
+			return nil // 跳过无法访问的文件
+		}
+		if info.IsDir() {
+			des, err := os.ReadDir(absPath)
+			if err != nil {
+				return nil
+			}
+			for _, de := range des {
+				child := filepath.Join(absPath, de.Name())
+				childPrefix := zipPrefix + "/" + de.Name()
+				if err := addToZip(child, childPrefix); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		// 普通文件
+		fh, err := zip.FileInfoHeader(info)
+		if err != nil {
+			return nil
+		}
+		fh.Name = zipPrefix
+		fh.Method = zip.Deflate
+		w, err := zw.CreateHeader(fh)
+		if err != nil {
+			return err
+		}
+		f, err := os.Open(absPath)
+		if err != nil {
+			return nil
+		}
+		defer f.Close()
+		_, err = io.Copy(w, f)
+		return err
+	}
+
+	for _, e := range entries {
+		_ = addToZip(e.abs, e.relRoot)
+	}
 }
 
 func (h *Handler) BatchMove(c *gin.Context) {
