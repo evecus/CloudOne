@@ -1,4 +1,4 @@
-name: 预构建
+name: pre-build
 
 on:
   workflow_dispatch: # 点击按钮即触发，无需手动输入版本号
