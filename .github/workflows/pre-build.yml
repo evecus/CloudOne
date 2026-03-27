@@ -1,4 +1,4 @@
-name: 构建正式版本
+name: 预构建
 
 on:
   workflow_dispatch:
@@ -47,7 +47,6 @@ jobs:
           GOOS: linux
           GOARCH: arm64
           CGO_ENABLED: 0
-          CC: aarch64-linux-gnu-gcc
         run: |
           go build -ldflags="-s -w" -o cloudone-linux-arm64 .
 
