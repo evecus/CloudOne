@@ -289,7 +289,7 @@
             <span>{{ ctxMenu.file?.is_dir ? (lang==='zh'?'打开':'Open') : t.editFile }}</span>
           </div>
           <div class="ctx-divider"></div>
-          <div v-if="!ctxMenu.file?.is_dir" class="ctx-item" @click="ctxAction('download')">
+          <div class="ctx-item" @click="ctxAction('download')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             <span>{{ t.download }}</span>
           </div>
@@ -342,8 +342,8 @@
       <!-- ===== 所有弹窗 ===== -->
 
       <!-- 上传文件：选好后手动确认 -->
-      <div v-if="showUpload" class="modal-bg" @click.self="showUpload=false;stagedFiles=[];uploadDone=false;uploadProgress=[]">
-        <div class="modal">
+      <div v-if="showUpload" class="modal-bg modal-bg-centered" @click.self="showUpload=false;stagedFiles=[];uploadDone=false;uploadProgress=[]">
+        <div class="modal modal-md">
           <h3>{{ t.upload }}</h3>
           <div class="upload-area" @click="$refs.fileInput.click()" @dragover.prevent @drop.prevent="dropUploadStage">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -371,8 +371,8 @@
       </div>
 
       <!-- 上传文件夹：同样需要手动确认 -->
-      <div v-if="showFolderUpload" class="modal-bg" @click.self="showFolderUpload=false">
-        <div class="modal">
+      <div v-if="showFolderUpload" class="modal-bg modal-bg-centered" @click.self="showFolderUpload=false">
+        <div class="modal modal-md">
           <h3>{{ t.uploadFolder }}</h3>
           <div class="upload-area" @click="$refs.folderInput.click()" @dragover.prevent @drop.prevent="dropFolderStage">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><polyline points="12 11 12 17"/><polyline points="9 14 12 11 15 14"/></svg>
@@ -398,8 +398,8 @@
       </div>
 
       <!-- 上传冲突确认 -->
-      <div v-if="showUploadConflict" class="modal-bg">
-        <div class="modal">
+      <div v-if="showUploadConflict" class="modal-bg modal-bg-centered">
+        <div class="modal modal-sm">
           <h3>{{ lang==='zh'?'发现同名文件':'Conflicting Files' }}</h3>
           <p style="font-size:13px;color:var(--gray-500);margin:0 0 10px">{{ lang==='zh'?'以下文件已存在，是否覆盖？':'The following files already exist. Overwrite?'}}</p>
           <div class="upload-list" style="max-height:160px;overflow-y:auto">
@@ -416,8 +416,8 @@
       </div>
 
       <!-- 新建文件夹 -->
-      <div v-if="showMkdir" class="modal-bg" @click.self="showMkdir=false">
-        <div class="modal">
+      <div v-if="showMkdir" class="modal-bg modal-bg-centered" @click.self="showMkdir=false">
+        <div class="modal modal-md">
           <h3>{{ t.newFolder }}</h3>
           <div class="field"><label>{{ t.folderName }}</label><input v-model="newDirName" type="text" @keyup.enter="doMkdir" autofocus /></div>
           <div class="modal-actions">
@@ -428,8 +428,8 @@
       </div>
 
       <!-- 新建文件 -->
-      <div v-if="showCreate" class="modal-bg" @click.self="showCreate=false">
-        <div class="modal modal-lg">
+      <div v-if="showCreate" class="modal-bg modal-bg-centered" @click.self="showCreate=false">
+        <div class="modal modal-md">
           <h3>{{ t.createFileTitle }}</h3>
           <div class="field"><label>{{ t.fileName }}</label><input v-model="newFile.name" type="text" /></div>
           <div class="field"><label>{{ t.fileContent }}</label><textarea v-model="newFile.content" rows="8"></textarea></div>
@@ -441,7 +441,7 @@
       </div>
 
       <!-- 编辑/预览文件 -->
-      <div v-if="showEdit" class="modal-bg" @click.self="closeEdit()">
+      <div v-if="showEdit" class="modal-bg modal-bg-fullscreen" @click.self="closeEdit()">
         <div class="modal" :class="(fileViewMode==='unsupported' && !forceTextMode) ? 'modal-unsupported' : 'modal-xl'" :key="forceTextMode ? 'editor' : fileViewMode">
           <div class="modal-titlebar">
             <h3>
@@ -478,8 +478,8 @@
       </div>
 
       <!-- 权限 -->
-      <div v-if="showChmod" class="modal-bg" @click.self="showChmod=false">
-        <div class="modal">
+      <div v-if="showChmod" class="modal-bg modal-bg-centered" @click.self="showChmod=false">
+        <div class="modal modal-md">
           <h3>{{ t.permTitle }}: <span class="edit-filename">{{ chmodTarget?.name }}</span></h3>
           <div class="perm-grid">
             <div class="perm-row">
@@ -510,7 +510,7 @@
       </div>
 
       <!-- 重命名弹窗 -->
-      <div v-if="showRename" class="modal-bg rename-modal-bg" @click.self="showRename=false">
+      <div v-if="showRename" class="modal-bg modal-bg-centered rename-modal-bg" @click.self="showRename=false">
         <div class="modal rename-modal">
           <h3>{{ t.rename }}</h3>
           <div class="rename-input-wrap">
@@ -532,9 +532,24 @@
         </div>
       </div>
 
+      <!-- 解压确认 -->
+      <div v-if="extractTarget" class="modal-bg modal-bg-centered" @click.self="extractTarget=null">
+        <div class="modal modal-sm">
+          <h3>{{ lang==='zh'?'确认解压':'Confirm Extract' }}</h3>
+          <p class="modal-desc">{{ lang==='zh'?`将解压 "${extractTarget?.name}" 到当前目录`:`Extract "${extractTarget?.name}" to current folder?` }}</p>
+          <div class="modal-actions">
+            <button class="btn-ghost" @click="extractTarget=null">{{ t.cancel }}</button>
+            <button class="btn-primary-sm" @click="doExtract">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M21 8l-4-4H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V8z"/><polyline points="17 4 17 8 21 8"/><polyline points="12 18 12 12"/><polyline points="9 15 12 18 15 15"/></svg>
+              {{ lang==='zh'?'解压':'Extract' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- 单个删除确认 -->
-      <div v-if="deleteTarget" class="modal-bg" @click.self="deleteTarget=null">
-        <div class="modal">
+      <div v-if="deleteTarget" class="modal-bg modal-bg-centered" @click.self="deleteTarget=null">
+        <div class="modal modal-sm">
           <h3>{{ t.confirmDelete }}</h3>
           <p class="modal-desc">{{ t.deleteWarning }}</p>
           <div class="modal-actions">
@@ -545,8 +560,8 @@
       </div>
 
       <!-- 文件信息弹窗 -->
-      <div v-if="infoTarget" class="modal-bg" @click.self="infoTarget=null">
-        <div class="modal info-modal">
+      <div v-if="infoTarget" class="modal-bg modal-bg-centered" @click.self="infoTarget=null">
+        <div class="modal modal-md info-modal">
           <div class="info-modal-header">
             <div class="info-modal-icon" :class="infoTarget.is_dir ? 'folder-icon' : getExt(infoTarget.name)">
               <svg v-if="infoTarget.is_dir" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2h-8l-2-2z"/></svg>
@@ -624,8 +639,8 @@
       </div>
 
       <!-- 批量删除确认 -->
-      <div v-if="showBatchDelete" class="modal-bg" @click.self="showBatchDelete=false">
-        <div class="modal">
+      <div v-if="showBatchDelete" class="modal-bg modal-bg-centered" @click.self="showBatchDelete=false">
+        <div class="modal modal-sm">
           <h3>{{ t.confirmBatchDelete }}</h3>
           <p class="modal-desc">{{ batchDeleteWarningText }}</p>
           <div class="modal-actions">
@@ -636,8 +651,8 @@
       </div>
 
       <!-- 分享 -->
-      <div v-if="showShareModal" class="modal-bg" @click.self="showShareModal=false;shareResult=null">
-        <div class="modal">
+      <div v-if="showShareModal" class="modal-bg modal-bg-centered" @click.self="showShareModal=false;shareResult=null">
+        <div class="modal modal-sm">
           <h3>{{ t.shareTitle }}</h3>
           <!-- 第一步：尚未创建分享 -->
           <template v-if="!shareResult">
@@ -667,8 +682,8 @@
       </div>
 
       <!-- 公开/私有 二次确认弹窗 -->
-      <div v-if="showVisibilityConfirm" class="modal-bg" @click.self="showVisibilityConfirm=false">
-        <div class="modal">
+      <div v-if="showVisibilityConfirm" class="modal-bg modal-bg-centered" @click.self="showVisibilityConfirm=false">
+        <div class="modal modal-sm">
           <h3>{{ visibilityTarget?.is_public ? t.confirmSetPrivate : t.confirmSetPublic }}</h3>
           <p class="modal-desc" style="margin-bottom:6px">
             {{ visibilityTarget?.is_public ? t.confirmSetPrivateDesc : t.confirmSetPublicDesc }}
@@ -696,7 +711,7 @@
       </div>
 
             <!-- 目录选择弹窗（移动 & 复制 共用） -->
-      <div v-if="showDirModal" class="modal-bg" @click.self="showDirModal=false">
+      <div v-if="showDirModal" class="modal-bg modal-bg-fullscreen" @click.self="showDirModal=false">
         <div class="modal modal-move">
           <div class="modal-titlebar">
             <h3>{{ dirModalMode==='move' ? t.moveTitle : t.copyTitle }}</h3>
@@ -747,8 +762,8 @@
       </div>
 
       <!-- 压缩弹窗 -->
-      <div v-if="showCompress" class="modal-bg" @click.self="showCompress=false">
-        <div class="modal">
+      <div v-if="showCompress" class="modal-bg modal-bg-centered" @click.self="showCompress=false">
+        <div class="modal modal-md">
           <h3>{{ t.compressTitle }}</h3>
           <div class="field">
             <label>{{ t.compressFormat }}</label>
@@ -779,8 +794,8 @@
       </div>
 
       <!-- 搜索弹窗 -->
-      <div v-if="showSearch" class="modal-bg" @click.self="showSearch=false">
-        <div class="modal">
+      <div v-if="showSearch" class="modal-bg modal-bg-centered" @click.self="showSearch=false">
+        <div class="modal modal-md">
           <h3>{{ t.searchTitle }}</h3>
           <div class="field">
             <label>{{ t.searchName }}</label>
@@ -821,8 +836,8 @@
       </div>
 
       <!-- 搜索结果弹窗 -->
-      <div v-if="showSearchResult" class="modal-bg" @click.self="showSearchResult=false">
-        <div class="modal modal-search-result">
+      <div v-if="showSearchResult" class="modal-bg modal-bg-centered" @click.self="showSearchResult=false">
+        <div class="modal modal-md modal-search-result">
           <h3>{{ t.searchResults }}: <span class="search-keyword">{{ searchName }}</span></h3>
           <p class="search-result-scope">{{ t.searchScope }}：<strong>{{ searchUsedDir }}</strong></p>
           <div v-if="searchResults.length === 0" class="search-empty">
@@ -855,8 +870,8 @@
       </div>
 
       <!-- 远程获取弹窗 -->
-      <div v-if="showFetch" class="modal-bg" @click.self="showFetch=false">
-        <div class="modal">
+      <div v-if="showFetch" class="modal-bg modal-bg-centered" @click.self="showFetch=false">
+        <div class="modal modal-md">
           <h3>{{ t.fetchTitle }}</h3>
           <div class="field">
             <label>{{ t.fetchUrl }}</label>
@@ -941,6 +956,7 @@ const showDirModal = ref(false)
 const showCompress = ref(false)
 const showFetch = ref(false)
 const showRename = ref(false)
+const extractTarget = ref(null)
 const renameTarget = ref(null)
 const renameValue = ref('')
 const renameInputRef = ref(null)
@@ -1053,7 +1069,26 @@ const moveTargetConflict = computed(() => {
 })
 
 // ── 加载 ──────────────────────────────────────────
+// 保存和恢复滚动位置
+let _preserveScroll = false
+function getScrollEl() {
+  return document.querySelector('.drop-zone')
+}
+function saveScroll() {
+  const el = getScrollEl()
+  return el ? el.scrollTop : 0
+}
+function restoreScroll(pos) {
+  nextTick(() => {
+    const el = getScrollEl()
+    if (el) el.scrollTop = pos
+  })
+}
+
 async function load() {
+  // 如果不是切换文件夹，则记录当前滚动位置并在加载后恢复
+  const scrollPos = _preserveScroll ? 0 : saveScroll()
+  const shouldRestore = !_preserveScroll
   loading.value = true
   try {
     const { data } = await api.get('/files', { params: { path: currentPath.value } })
@@ -1067,8 +1102,13 @@ async function load() {
     showToast(e.response?.data?.error || (lang.value === 'zh' ? '加载失败，请检查网络或路径' : 'Load failed, check network or path'))
   }
   loading.value = false
+  if (shouldRestore && scrollPos > 0) {
+    restoreScroll(scrollPos)
+  }
+  _preserveScroll = false
 }
 function navigate(path) {
+  _preserveScroll = true  // 切换文件夹时重置到顶部
   currentPath.value = path
   // 同步到地址栏：根目录 → /files，其他 → /files/etc/systemd
   const urlPath = path === '/' ? '/files' : '/files' + path
@@ -1157,7 +1197,7 @@ async function ctxAction(action) {
       if (file.is_dir) navigate(file.path)
       else editFile(file)
       break
-    case 'download': downloadFile(file); break
+    case 'download': file.is_dir ? downloadDirAsZip(file) : downloadFile(file); break
     case 'share': await shareFile(file); break
     case 'togglePublic': togglePublic(file); break
     case 'chmod': await openChmod(file); break
@@ -1181,7 +1221,7 @@ async function ctxAction(action) {
       showCompress.value = true
       break
     case 'extract':
-      await doExtract(file)
+      extractTarget.value = file
       break
   }
 }
@@ -1192,12 +1232,16 @@ function isArchive(name) {
   return ext.endsWith('.zip') || ext.endsWith('.tar.gz') || ext.endsWith('.tar') || ext.endsWith('.gz')
 }
 
-async function doExtract(file) {
+async function doExtract() {
+  const file = extractTarget.value
+  if (!file) return
   try {
     await api.post('/files/decompress', { path: file.path, dir: currentPath.value })
+    extractTarget.value = null
     load()
   } catch(e) {
-    alert(e.response?.data?.error || (lang.value==='zh'?'解压失败':'Extract failed'))
+    extractTarget.value = null
+    showToast(e.response?.data?.error || (lang.value==='zh'?'解压失败':'Extract failed'))
   }
 }
 
@@ -1215,13 +1259,50 @@ async function doBatchDelete() {
 }
 
 async function doBatchDownload() {
+  // 用当前文件夹名作为压缩包名称
+  const folderName = currentPath.value === '/' ? 'files' : currentPath.value.split('/').filter(Boolean).pop()
+  const zipFilename = folderName + '.zip'
   const token = localStorage.getItem('token')
   const resp = await fetch('/api/files/batch-download', {
-    method:'POST', headers:{'Content-Type':'application/json', Authorization:`Bearer ${token}`},
-    body: JSON.stringify({ paths: selected.value })
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ paths: selected.value, filename: folderName })
   })
+  if (!resp.ok) {
+    showToast(lang.value === 'zh' ? '打包下载失败' : 'Batch download failed')
+    return
+  }
   const blob = await resp.blob()
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'download.zip'; a.click(); URL.revokeObjectURL(a.href)
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = zipFilename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(a.href)
+}
+
+// 下载单个文件夹（压缩为zip）
+async function downloadDirAsZip(file) {
+  const dirName = file.name
+  const token = localStorage.getItem('token')
+  const resp = await fetch('/api/files/batch-download', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ paths: [file.path], filename: dirName })
+  })
+  if (!resp.ok) {
+    showToast(lang.value === 'zh' ? '文件夹下载失败' : 'Folder download failed')
+    return
+  }
+  const blob = await resp.blob()
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = dirName + '.zip'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(a.href)
 }
 
 async function openDirModal(mode) {
@@ -1846,14 +1927,24 @@ watch(() => _route.params.pathMatch, (val) => {
 
 /* 弹窗通用 */
 .modal-bg { position:fixed; inset:0; background:rgba(15,23,42,.45); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; z-index:100; }
-.modal { background:white; border-radius:20px; padding:32px; width:440px; max-width:90vw; box-shadow:var(--shadow-lg); animation:modalIn .2s cubic-bezier(.4,0,.2,1); overflow:hidden; }
-.modal-lg { width:520px; }
-.modal-xl { width:900px; min-height:600px; max-height:92vh; display:flex; flex-direction:column; padding:0; background:#F8FAFC; }
-.modal-unsupported { width:440px; max-width:90vw; max-height:90vh; display:flex; flex-direction:column; padding:0; background:#F8FAFC; }
+
+/* 层级1：全屏级（编辑框、移动/复制框） */
+.modal-bg-fullscreen { align-items:center; justify-content:center; }
+.modal-xl { width:900px; min-height:600px; max-height:92vh; display:flex; flex-direction:column; padding:0; background:#F8FAFC; border-radius:20px; box-shadow:var(--shadow-lg); animation:modalIn .2s cubic-bezier(.4,0,.2,1); overflow:hidden; }
+.modal-unsupported { width:440px; max-width:90vw; max-height:90vh; display:flex; flex-direction:column; padding:0; background:#F8FAFC; border-radius:20px; box-shadow:var(--shadow-lg); animation:modalIn .2s cubic-bezier(.4,0,.2,1); overflow:hidden; }
+.modal-move { width:900px; max-width:92vw; max-height:88vh; display:flex; flex-direction:column; border-radius:20px; box-shadow:var(--shadow-lg); animation:modalIn .2s cubic-bezier(.4,0,.2,1); overflow:hidden; background:white; padding:28px; }
 .modal-xl .modal-titlebar, .modal-unsupported .modal-titlebar { padding:14px 20px 12px; border-bottom:1.5px solid var(--gray-200); margin-bottom:0; background:#F1F5F9; border-radius:20px 20px 0 0; }
 .modal-xl .field { padding:0; margin:0; background:#F8FAFC; flex:1; display:flex; flex-direction:column; }
 .modal-xl .modal-actions, .modal-unsupported .modal-actions { padding:10px 20px; border-top:1.5px solid var(--gray-200); background:#F1F5F9; margin-top:0; border-radius:0 0 20px 20px; }
-.modal-move { width:500px; display:flex; flex-direction:column; }
+
+/* 层级2：中等（有输入/信息多，居中） */
+.modal-bg-centered { align-items:center; justify-content:center; }
+.modal { background:white; border-radius:20px; padding:32px; box-shadow:var(--shadow-lg); animation:modalIn .2s cubic-bezier(.4,0,.2,1); overflow:hidden; }
+.modal-md { width:520px; max-width:90vw; }
+
+/* 层级3：小提示（确认框，居中，统一尺寸） */
+.modal-sm { width:400px; max-width:90vw; }
+
 @keyframes modalIn { from{opacity:0;transform:scale(.95) translateY(8px)} to{opacity:1;transform:scale(1) translateY(0)} }
 .modal-titlebar { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
 .modal-titlebar h3 { font-size:17px; font-weight:600; color:var(--gray-800); margin:0; }
@@ -1950,7 +2041,6 @@ watch(() => _route.params.pathMatch, (val) => {
 .search-result-scope strong { font-family:'JetBrains Mono',monospace; color:var(--gray-600); }
 .search-keyword { font-weight:700; color:var(--blue-600); }
 .spin-icon { animation: spin 1s linear infinite; }
-.modal-search-result { max-height:70vh; display:flex; flex-direction:column; }
 .search-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px 20px; gap:12px; flex:1; }
 .search-empty svg { width:48px; height:48px; color:var(--gray-300); }
 .search-empty p { font-size:14px; color:var(--gray-400); font-weight:500; }
@@ -2157,53 +2247,54 @@ watch(() => _route.params.pathMatch, (val) => {
   .row-actions .act-btn:not(.act-more) { display:none; }
   .row-actions { justify-content:flex-end; }
 
-  /* 弹窗底部弹出 */
-  .modal-bg { align-items:flex-end; }
-  .modal {
-    width:100% !important; max-width:100% !important;
-    border-radius:20px 20px 0 0 !important;
-    padding:24px 20px 32px !important;
-    max-height:90vh; overflow-y:auto;
-  }
-  .modal-xl, .modal-unsupported {
-    width:100% !important; max-width:100% !important;
-    max-height:92vh !important;
-    border-radius:20px 20px 0 0 !important;
-  }
-  /* 编辑器弹窗移动端适配：全屏填满可视区域 */
-  .modal-bg:has(.modal-xl) {
-    align-items: stretch;
-    justify-content: stretch;
-    padding: 0;
-  }
-  .modal-xl {
-    width: 100% !important;
-    max-width: 100% !important;
-    height: 100% !important;
-    max-height: 100% !important;
-    border-radius: 0 !important;
-    margin: 0 !important;
-  }
-  /* 移动端编辑框：去掉所有内边距，让编辑器占满全部空间 */
-  .edit-field-wrap { padding:0 !important; min-height:0 !important; }
-  .modal .field input { font-size:16px; }
+  /* ── 移动端弹窗：全部居中，按层级适配 ── */
 
-  /* 编辑弹窗标题栏：文件名截断，不换行，极紧凑 */
+  /* 层级1：全屏级（编辑框、移动/复制框）*/
+  .modal-bg-fullscreen { align-items:stretch; justify-content:stretch; padding:0; }
+  .modal-xl {
+    width:100% !important; max-width:100% !important;
+    height:100% !important; max-height:100% !important;
+    border-radius:0 !important; margin:0 !important;
+  }
+  .modal-move {
+    width:100% !important; max-width:100% !important;
+    height:100% !important; max-height:100% !important;
+    border-radius:0 !important; margin:0 !important;
+    padding:20px 16px !important;
+    overflow-y:auto;
+  }
+  /* 移动端编辑框：编辑区占满 */
+  .edit-field-wrap { padding:0 !important; min-height:0 !important; }
   .modal-xl .modal-titlebar { padding:8px 12px 6px; }
   .modal-xl .modal-titlebar h3 { font-size:14px; min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; flex:1; }
   .edit-filename { display:inline-block; max-width:55vw; overflow:hidden; text-overflow:ellipsis; vertical-align:bottom; white-space:nowrap; }
+  .modal-xl .modal-actions { padding:8px 14px; padding-bottom:calc(8px + env(safe-area-inset-bottom, 0px)); }
 
   /* unsupported 内容区移动端紧凑 */
   .unsupported-wrap { padding:20px 16px; gap:10px; }
   .unsupported-wrap svg { width:44px; height:44px; }
   .unsupported-wrap p { font-size:13px; text-align:center; }
-
-  /* 底栏按钮移动端：加大点击区域，两按钮各占一半 */
   .modal-actions-unsupported { padding:12px 16px; gap:10px; }
   .modal-actions-unsupported .btn-action-mob { flex:1; justify-content:center; padding:11px 10px; font-size:14px; }
 
-  /* iOS safe area 底部留白，防止 home 条遮住按钮 */
-  .modal-xl .modal-actions { padding:8px 14px; padding-bottom:calc(8px + env(safe-area-inset-bottom, 0px)); }
+  /* 层级2：中等（居中，适配宽度）*/
+  .modal-bg-centered { align-items:center; justify-content:center; padding:16px; }
+  .modal-md {
+    width:100% !important; max-width:480px !important;
+    max-height:88vh; overflow-y:auto;
+    border-radius:20px !important;
+    padding:24px 20px !important;
+  }
+
+  /* 层级3：小提示（居中，固定宽度）*/
+  .modal-sm {
+    width:100% !important; max-width:360px !important;
+    max-height:80vh; overflow-y:auto;
+    border-radius:18px !important;
+    padding:24px 20px !important;
+  }
+
+  .modal .field input { font-size:16px; }
   .dir-tree { max-height:200px; }
   .ctx-menu { min-width:180px; }
   .ctx-item { padding:12px 16px; font-size:14px; }
@@ -2286,17 +2377,16 @@ watch(() => _route.params.pathMatch, (val) => {
 
 /* 移动端：重命名弹窗居中而非底部弹出 */
 @media (max-width: 768px) {
-  .rename-modal-bg {
-    align-items: center !important;
-  }
+  /* rename-modal-bg 已继承 modal-bg-centered，无需额外居中覆盖 */
   .rename-modal {
-    width: 88vw !important;
-    max-width: 360px !important;
+    width: 100% !important;
+    max-width: 420px !important;
     border-radius: 18px !important;
     padding: 24px 20px 20px !important;
+    max-height: 80vh; overflow-y: auto;
   }
   .rename-input {
-    font-size: 16px; /* 防 iOS 自动缩放 */
+    font-size: 16px;
     padding: 13px 14px;
   }
   .rename-actions .btn-ghost,
