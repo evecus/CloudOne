@@ -1,4 +1,4 @@
-name: 构建二进制文件和docker镜像并发布
+name: build and release with docker
 
 on:
   workflow_dispatch:
