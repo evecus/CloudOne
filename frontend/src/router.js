@@ -5,6 +5,7 @@ const routes = [
   { path: '/login', component: () => import('./views/Login.vue'), meta: { public: true } },
   { path: '/', redirect: '/files' },
   { path: '/files/:pathMatch(.*)*', component: () => import('./views/Files.vue') },
+  { path: '/edit/:pathMatch(.*)*', component: () => import('./views/FileEditor.vue') },
   { path: '/shared', component: () => import('./views/Shared.vue') },
   { path: '/public-files', component: () => import('./views/PublicFiles.vue') },
   { path: '/webdav', component: () => import('./views/WebDAV.vue') },

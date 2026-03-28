@@ -219,6 +219,7 @@ func main() {
 			authed.POST("/files/create", h.CreateFile)
 			authed.PUT("/files/visibility", h.SetVisibility)
 			authed.GET("/files/content", h.GetFileContent)
+			authed.GET("/files/detect", h.DetectFileType)
 			authed.PUT("/files/content", h.UpdateFileContent)
 			authed.GET("/files/permission", h.GetPermission)
 			authed.PUT("/files/permission", h.SetPermission)

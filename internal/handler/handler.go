@@ -1671,3 +1671,57 @@ func copyPath(src, dst string) error {
 	_, err = io.Copy(out, in)
 	return err
 }
+
+// DetectFileType 用 `file` 命令检测文件是否为文本类型
+// 返回 {"text": true/false}
+func (h *Handler) DetectFileType(c *gin.Context) {
+	path := c.Query("path")
+	absPath, err := h.files.AbsPath(path)
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	out, err := exec.Command("file", "--mime-type", "-b", absPath).Output()
+	if err != nil {
+		// file 命令不可用时，尝试读取前 512 字节判断是否含 NUL
+		f, ferr := os.Open(absPath)
+		if ferr != nil {
+			c.JSON(500, gin.H{"error": ferr.Error()})
+			return
+		}
+		defer f.Close()
+		buf := make([]byte, 512)
+		n, _ := f.Read(buf)
+		for _, b := range buf[:n] {
+			if b == 0 {
+				c.JSON(200, gin.H{"text": false})
+				return
+			}
+		}
+		c.JSON(200, gin.H{"text": true})
+		return
+	}
+	mimeType := strings.TrimSpace(string(out))
+	isText := strings.HasPrefix(mimeType, "text/") ||
+		strings.Contains(mimeType, "json") ||
+		strings.Contains(mimeType, "xml") ||
+		strings.Contains(mimeType, "javascript") ||
+		strings.Contains(mimeType, "x-sh") ||
+		strings.Contains(mimeType, "x-python") ||
+		strings.Contains(mimeType, "x-ruby") ||
+		strings.Contains(mimeType, "x-perl") ||
+		strings.Contains(mimeType, "x-script") ||
+		mimeType == "application/octet-stream" && func() bool {
+			// octet-stream 再用 NUL 字节判断
+			f, ferr := os.Open(absPath)
+			if ferr != nil { return false }
+			defer f.Close()
+			buf := make([]byte, 512)
+			n, _ := f.Read(buf)
+			for _, b := range buf[:n] {
+				if b == 0 { return false }
+			}
+			return true
+		}()
+	c.JSON(200, gin.H{"text": isText, "mime": mimeType})
+}

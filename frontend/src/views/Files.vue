@@ -282,11 +282,19 @@
 
     <!-- ===== 右键菜单 ===== -->
     <teleport to="body">
+      <!-- 检测文件类型时的全屏遮罩 -->
+      <div v-if="detectingFile" class="ctx-overlay detecting-overlay">
+        <div class="detecting-popup">
+          <div class="detecting-spinner"></div>
+          <span>{{ lang==='zh' ? '正在检测文件类型…' : 'Detecting file type…' }}</span>
+        </div>
+      </div>
       <div v-if="ctxMenu.show" class="ctx-overlay" @mousedown.self="closeCtxMenu" @contextmenu.prevent>
         <div class="ctx-menu" :style="{ top: ctxMenu.y + 'px', left: ctxMenu.x + 'px' }">
-          <div class="ctx-item" @click="ctxAction('edit')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            <span>{{ ctxMenu.file?.is_dir ? (lang==='zh'?'打开':'Open') : t.editFile }}</span>
+          <div class="ctx-item" @click="ctxAction('open')">
+            <svg v-if="ctxMenu.file?.is_dir" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            <span>{{ lang==='zh' ? '打开' : 'Open' }}</span>
           </div>
           <div class="ctx-divider"></div>
           <div class="ctx-item" @click="ctxAction('download')">
@@ -427,12 +435,11 @@
         </div>
       </div>
 
-      <!-- 新建文件 -->
+      <!-- 新建文件：只输入文件名，创建后跳转编辑页 -->
       <div v-if="showCreate" class="modal-bg modal-bg-centered" @click.self="showCreate=false">
         <div class="modal modal-md">
           <h3>{{ t.createFileTitle }}</h3>
-          <div class="field"><label>{{ t.fileName }}</label><input v-model="newFile.name" type="text" /></div>
-          <div class="field"><label>{{ t.fileContent }}</label><textarea v-model="newFile.content" rows="8"></textarea></div>
+          <div class="field"><label>{{ t.fileName }}</label><input ref="createFileInput" v-model="newFile.name" type="text" @keyup.enter="doCreateFile" autofocus /></div>
           <div class="modal-actions">
             <button class="btn-ghost" @click="showCreate=false">{{ t.cancel }}</button>
             <button class="btn-primary-sm" @click="doCreateFile">{{ t.create }}</button>
@@ -440,42 +447,7 @@
         </div>
       </div>
 
-      <!-- 编辑/预览文件 -->
-      <div v-if="showEdit" class="modal-bg modal-bg-fullscreen" @click.self="closeEdit()">
-        <div class="modal" :class="(fileViewMode==='unsupported' && !forceTextMode) ? 'modal-unsupported' : 'modal-xl'" :key="forceTextMode ? 'editor' : fileViewMode">
-          <div class="modal-titlebar">
-            <h3>
-              <span v-if="fileViewMode==='image'">{{ lang==='zh'?'预览图片':'Preview' }}</span>
-              <span v-else>{{ t.editFileTitle }}</span>:
-              <span class="edit-filename">{{ editTarget?.name }}</span>
-            </h3>
-            <button class="icon-close" @click="closeEdit()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          </div>
-          <div v-if="fileViewMode==='image'" class="preview-img-wrap"><img :src="previewUrl" :alt="editTarget?.name" class="preview-img" /></div>
-          <div v-else-if="fileViewMode==='unsupported' && !forceTextMode" class="unsupported-wrap">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            <p>{{ lang==='zh'?'此文件类型不支持在线预览或编辑':'This file type cannot be previewed or edited online' }}</p>
-            <span class="unsupported-ext">.{{ editTarget?.name?.split('.').pop()?.toUpperCase() }}</span>
-          </div>
-          <div v-else-if="fileViewMode==='text' || forceTextMode" class="edit-field-wrap">
-            <p v-if="editError" class="edit-error">{{ editError }}</p>
-            <CodeEditor v-else v-model="editContent" :filename="editTarget?.name || ''" />
-          </div>
-          <div class="modal-actions" :class="{ 'modal-actions-unsupported': fileViewMode==='unsupported' && !forceTextMode }">
-            <button v-if="fileViewMode==='unsupported' && !forceTextMode" class="btn-ghost btn-action-mob" @click="forceEditFile">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-              {{ lang==='zh'?'尝试编辑':'Try Edit' }}
-            </button>
-            <button v-if="fileViewMode==='unsupported' && !forceTextMode" class="btn-ghost btn-action-mob" @click="downloadFile(editTarget);showEdit=false">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              {{ t.download }}
-            </button>
-            <button v-if="(fileViewMode==='text' || forceTextMode) && !editError" class="btn-primary-sm" @click="doSaveFile">{{ t.saveFile }}</button>
-          </div>
-        </div>
-      </div>
+      <!-- 编辑/预览文件：已改为独立页面 /edit/... -->
 
       <!-- 权限 -->
       <div v-if="showChmod" class="modal-bg modal-bg-centered" @click.self="showChmod=false">
@@ -949,7 +921,6 @@ const showUpload = ref(false)
 const showFolderUpload = ref(false)
 const showMkdir = ref(false)
 const showCreate = ref(false)
-const showEdit = ref(false)
 const showChmod = ref(false)
 const showBatchDelete = ref(false)
 const showDirModal = ref(false)
@@ -991,12 +962,6 @@ const copied = ref(false)
 const showVisibilityConfirm = ref(false)
 const visibilityTarget = ref(null)
 
-const editTarget = ref(null)
-const editContent = ref('')
-const editError = ref('')
-const fileViewMode = ref('text')
-const forceTextMode = ref(false)
-const previewUrl = ref('')
 
 const chmodTarget = ref(null)
 const perm = ref({ ownerR:false,ownerW:false,ownerX:false,groupR:false,groupW:false,groupX:false,otherR:false,otherW:false,otherX:false })
@@ -1133,7 +1098,17 @@ function toggleSelectAll() {
 function handleRowClick(file) {
   if (selectMode.value) { toggleSelect(file); return }
   if (file.is_dir) navigate(file.path)
-  else editFile(file)
+  else {
+    // 文件左键点击：弹出操作菜单（与右键相同）
+    const menuW = 210
+    const baseH = 390
+    const extraH = isArchive(file.name) ? 36 : 0
+    const menuH = baseH + extraH
+    // 居中偏右显示
+    let x = Math.min(window.innerWidth / 2, window.innerWidth - menuW - 8)
+    let y = Math.max(8, window.innerHeight / 2 - menuH / 2)
+    ctxMenu.value = { show: true, x, y, file }
+  }
 }
 function exitSelectAndClose(which) {
   if (which === 'compress') { showCompress.value = false; compressForm.value = { format:'zip', output:'' } }
@@ -1167,14 +1142,11 @@ let longPressTimer = null
 let touchMoved = false
 function onTouchStart(e, file) {
   touchMoved = false
+  if (file.is_dir) return  // 文件夹：普通点击导航，不需要长按菜单
   longPressTimer = setTimeout(() => {
     if (!touchMoved) {
-      const menuW = 200
-      const baseH = file.is_dir ? 360 : 390
-      const extraH = isArchive(file.name) ? 36 : 0
-      const menuH = baseH + extraH
+      const menuW = 210
       const x = window.innerWidth - menuW - 8
-      // 固定 y=85
       const y = 85
       ctxMenu.value = { show:true, x, y, file }
     }
@@ -1193,9 +1165,9 @@ async function ctxAction(action) {
   closeCtxMenu()
   if (!file) return
   switch (action) {
-    case 'edit':
-      if (file.is_dir) navigate(file.path)
-      else editFile(file)
+    case 'open':
+      if (file.is_dir) { navigate(file.path); break }
+      await openFile(file)
       break
     case 'download': file.is_dir ? downloadDirAsZip(file) : downloadFile(file); break
     case 'share': await shareFile(file); break
@@ -1445,63 +1417,55 @@ function downloadFile(file) {
     .then(r=>r.blob()).then(blob=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=file.name;a.click();URL.revokeObjectURL(a.href)})
 }
 
+// 文件类型判断（扩展名白名单）
 const TEXT_EXTS  = new Set(['txt','md','markdown','dockerfile','makefile','log','service','timer','mount','target','ini','asc','keys','readme','man','networks','hosts','hostname','fstab','group','timezone','crontab','conf','cfg','env','yaml','yml','toml','json','jsonc','json5','html','htm','xml','svg','css','scss','sass','less','js','mjs','cjs','ts','tsx','jsx','vue','svelte','astro','py','go','java','rs','c','cpp','cc','h','hpp','sh','mod','bash','zsh','fish','ps1','bat','cmd','rb','php','pl','lua','r','swift','kt','cs','vb','sql','graphql','proto','csv','tsv','tex','rst','adoc','dart','scala','clj','cljs','erl','hrl','ex','exs','sol','gd','glsl','hlsl','wgsl','properties','gradle','editorconfig','browserslistrc','lock','strings','plist','xcconfig','ejs','pug','jade','hbs','handlebars','twig','liquid','mjml','ipynb','bib','diff','patch','ignore','procfile','htpasswd','htaccess','inf','reg','awk','sls','tf','tfvars','j2','repo','rules','dts','dtsi','config','inc','po','pot','msg'])
 const IMAGE_EXTS = new Set(['jpg','jpeg','png','gif','webp','bmp','ico','tiff','tif','avif','svg'])
-function getFileViewMode(filename) {
-  if (!filename) return 'unsupported'
-  const lower = filename.toLowerCase()
-  // 无扩展名文件：直接用完整小写文件名匹配（Dockerfile、Makefile、.env 等）
-  if (!filename.includes('.')) {
-    return TEXT_EXTS.has(lower) ? 'text' : 'unsupported'
-  }
+
+function getFileViewMode(name) {
+  if (!name) return 'unsupported'
+  const lower = name.toLowerCase()
+  const base = lower.split('/').pop()
+  if (['dockerfile','makefile','gnumakefile'].includes(base)) return 'text'
+  if (!name.includes('.')) return TEXT_EXTS.has(lower) ? 'text' : 'unknown'
   const ext = lower.split('.').pop()
   if (IMAGE_EXTS.has(ext)) return 'image'
   if (TEXT_EXTS.has(ext)) return 'text'
-  return 'unsupported'
+  return 'unknown'
 }
-async function editFile(file) {
-  editTarget.value=file; editContent.value=''; editError.value=''; previewUrl.value=''; forceTextMode.value=false
-  showEdit.value=true; const mode=getFileViewMode(file.name); fileViewMode.value=mode
-  if (mode==='image') {
-    const token=localStorage.getItem('token')
-    try {
-      const resp=await fetch(`/api/files/download?path=${encodeURIComponent(file.path)}`,{headers:{Authorization:`Bearer ${token}`}})
-      previewUrl.value=URL.createObjectURL(await resp.blob())
-    } catch { fileViewMode.value='unsupported' }
+
+// 根据文件类型决定打开方式
+// image → /edit 预览；text → /edit 编辑；unknown → 后端 detect 判断
+const detectingFile = ref(null)  // 正在 detect 的文件，用于显示加载态
+async function openFile(file) {
+  const mode = getFileViewMode(file.name)
+  if (mode === 'image' || mode === 'text') {
+    _router.push('/edit' + file.path)
     return
   }
-  if (mode==='unsupported') return
-  try { const {data}=await api.get('/files/content',{params:{path:file.path}}); editContent.value=data.content }
-  catch(e) { editError.value=e.response?.data?.error||t.value.binaryFile }
-}
-// 强制以文本模式打开（用于 unsupported 文件尝试编辑）
-async function forceEditFile() {
-  if (!editTarget.value) return
-  forceTextMode.value = true   // 触发弹窗切换为 modal-xl
-  editContent.value = ''
-  editError.value = ''
+  // 未知类型：调后端 file 命令检测
+  detectingFile.value = file.path
   try {
-    const { data } = await api.get('/files/content', { params: { path: editTarget.value.path } })
-    editContent.value = data.content
-  } catch(e) {
-    editError.value = e.response?.data?.error || (lang.value === 'zh' ? '无法读取文件内容' : 'Cannot read file content')
+    const { data } = await api.get('/files/detect', { params: { path: file.path } })
+    if (data.text) {
+      _router.push('/edit' + file.path)
+    } else {
+      // 非文本：提示打开失败
+      const msg = lang.value === 'zh'
+        ? `无法打开"${file.name}"：该文件为二进制格式（${data.mime || '未知类型'}），不支持在线编辑`
+        : `Cannot open "${file.name}": binary file (${data.mime || 'unknown type'}), not supported for editing`
+      alert(msg)
+    }
+  } catch (e) {
+    const msg = lang.value === 'zh' ? `检测文件类型失败：${e.response?.data?.error || e.message}` : `Failed to detect file type: ${e.response?.data?.error || e.message}`
+    alert(msg)
+  } finally {
+    detectingFile.value = null
   }
 }
-function closeEdit() {
-  showEdit.value = false
-  if (previewUrl.value) {
-    URL.revokeObjectURL(previewUrl.value)
-    previewUrl.value = ''
-  }
-}
-async function doSaveFile() {
-  try {
-    await api.put('/files/content', {path: editTarget.value.path, content: editContent.value});
-    closeEdit();
-    load()
-  } catch(e) {
-    editError.value = e.response?.data?.error || 'Save failed'
-  }
+
+function editFile(file) {
+  // 跳转到独立编辑页面：/edit/root/1.txt
+  _router.push('/edit' + file.path)
 }
 async function openChmod(file) {
   chmodTarget.value=file; showChmod.value=true
@@ -1619,15 +1583,20 @@ async function doMkdir() {
   }
 }
 async function doCreateFile() {
-  if (!newFile.value.name) return
-  const conflict = files.value.find(f => f.name === newFile.value.name)
+  if (!newFile.value.name.trim()) return
+  const name = newFile.value.name.trim()
+  const conflict = files.value.find(f => f.name === name)
   if (conflict) {
-    showToast(lang.value==='zh' ? `"${newFile.value.name}" 已存在，请使用其他名称` : `"${newFile.value.name}" already exists`)
+    showToast(lang.value==='zh' ? `"${name}" 已存在，请使用其他名称` : `"${name}" already exists`)
     return
   }
+  const filePath = currentPath.value.replace(/\/$/, '') + '/' + name
   try {
-    await api.post('/files/create',{path:currentPath.value.replace(/\/$/,'')+'/'+newFile.value.name,content:newFile.value.content})
-    newFile.value={name:'',content:''}; showCreate.value=false; load()
+    await api.post('/files/create', { path: filePath, content: '' })
+    newFile.value = { name: '', content: '' }
+    showCreate.value = false
+    // 创建后直接进入编辑页
+    _router.push('/edit' + filePath)
   } catch(e) {
     showToast(e.response?.data?.error || (lang.value==='zh'?'创建失败':'Create failed'))
   }
@@ -1915,6 +1884,9 @@ watch(() => _route.params.pathMatch, (val) => {
 
 /* 右键菜单 */
 .ctx-overlay { position:fixed; inset:0; z-index:300; }
+.detecting-overlay { background:rgba(15,23,42,.25); display:flex; align-items:center; justify-content:center; z-index:400; }
+.detecting-popup { display:flex; align-items:center; gap:12px; background:#fff; padding:14px 22px; border-radius:12px; box-shadow:0 4px 20px rgba(15,23,42,.15); font-size:14px; color:var(--gray-700); }
+.detecting-spinner { width:18px; height:18px; border:2.5px solid var(--blue-100); border-top-color:var(--blue-500); border-radius:50%; animation:spin .7s linear infinite; flex-shrink:0; }
 .ctx-menu { position:fixed; background:white; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.18),0 0 0 1px rgba(0,0,0,0.06); padding:5px; min-width:190px; z-index:301; animation:ctxIn .12s cubic-bezier(.4,0,.2,1); }
 @keyframes ctxIn { from{opacity:0;transform:scale(.95)} to{opacity:1;transform:scale(1)} }
 .ctx-item { display:flex; align-items:center; gap:9px; padding:8px 12px; border-radius:8px; cursor:pointer; font-size:13px; color:var(--gray-700); transition:background .1s; user-select:none; }
