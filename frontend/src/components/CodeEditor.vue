@@ -36,6 +36,7 @@ const editorEl  = ref(null)
 const isFocused = ref(false)
 const view      = shallowRef(null)
 const langCompartment = new Compartment()
+const editableCompartment = new Compartment()
 
 // ── 语言检测 ────────────────────────────────────────────
 const LANG_MAP = {
@@ -183,7 +184,7 @@ onMounted(() => {
         isFocused.value = focusing
         return null
       }),
-      EditorView.editable.of(!props.readonly),
+      editableCompartment.of(EditorView.editable.of(!props.readonly)),
       EditorView.lineWrapping,
     ],
   })
@@ -212,6 +213,14 @@ watch(() => props.filename, (name) => {
   const langExts = getLangExtension(name)
   view.value.dispatch({
     effects: langCompartment.reconfigure(langExts)
+  })
+})
+
+// readonly 变更时动态切换可编辑状态
+watch(() => props.readonly, (val) => {
+  if (!view.value) return
+  view.value.dispatch({
+    effects: editableCompartment.reconfigure(EditorView.editable.of(!val))
   })
 })
 </script>
