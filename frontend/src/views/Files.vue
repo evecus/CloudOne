@@ -252,11 +252,7 @@
               class="file-row"
               :data-name="file.name"
               :class="{ selected: selected.includes(file.path), 'select-mode': selectMode, 'highlight-row': highlightName === file.name }"
-              @click="handleRowClick(file)"
-              @contextmenu.prevent="openCtxMenu($event, file)"
-              @touchstart="onTouchStart($event, file)"
-              @touchend="onTouchEnd"
-              @touchmove="onTouchMove"
+              @click="handleRowClick($event, file)"
             >
               <div v-if="selectMode" class="col-check" @click.stop="toggleSelect(file)">
                 <div class="checkmark" :class="{ checked: selected.includes(file.path) }">
@@ -1095,19 +1091,27 @@ function toggleSelectAll() {
   if (allSelected.value) selected.value = []
   else selected.value = files.value.map(f => f.path)
 }
-function handleRowClick(file) {
+function handleRowClick(e, file) {
   if (selectMode.value) { toggleSelect(file); return }
   if (file.is_dir) navigate(file.path)
   else {
-    // 文件左键点击：弹出操作菜单（与右键相同）
+    // 文件点击：弹出操作菜单，位置跟随鼠标（桌面）或触点（移动端）
     const menuW = 210
-    const baseH = 390
-    const extraH = isArchive(file.name) ? 36 : 0
-    const menuH = baseH + extraH
-    // 居中偏右显示
-    let x = Math.min(window.innerWidth / 2, window.innerWidth - menuW - 8)
-    let y = Math.max(8, window.innerHeight / 2 - menuH / 2)
+    let x = e.clientX ?? e.touches?.[0]?.clientX ?? window.innerWidth / 2
+    let y = e.clientY ?? e.touches?.[0]?.clientY ?? window.innerHeight / 2
+    if (x + menuW > window.innerWidth) x = window.innerWidth - menuW - 8
+    if (y < 8) y = 8
     ctxMenu.value = { show: true, x, y, file }
+    nextTick(() => {
+      const el = document.querySelector('.ctx-menu')
+      if (!el) return
+      const menuH = el.offsetHeight
+      if (y + menuH > window.innerHeight - 8) {
+        y = window.innerHeight - menuH - 8
+        if (y < 8) y = 8
+        ctxMenu.value = { ...ctxMenu.value, y }
+      }
+    })
   }
 }
 function exitSelectAndClose(which) {
@@ -1115,50 +1119,10 @@ function exitSelectAndClose(which) {
   exitSelectMode()
 }
 
-// ── 右键菜单 ──────────────────────────────────────
-function openCtxMenu(e, file) {
-  closeCtxMenu()
-  // 先在点击位置渲染，nextTick 后拿到真实尺寸再修正
-  const menuW = 210
-  let x = e.clientX, y = e.clientY
-  if (x + menuW > window.innerWidth) x = window.innerWidth - menuW - 8
-  if (y < 8) y = 8
-  ctxMenu.value = { show:true, x, y, file }
-  nextTick(() => {
-    const el = document.querySelector('.ctx-menu')
-    if (!el) return
-    const menuH = el.offsetHeight
-    if (y + menuH > window.innerHeight - 8) {
-      y = window.innerHeight - menuH - 8
-      if (y < 8) y = 8
-      ctxMenu.value = { ...ctxMenu.value, y }
-    }
-  })
-}
+// ── 右键菜单（已由左键点击接管，此函数保留兼容） ──
 function closeCtxMenu() { ctxMenu.value = { show:false, x:0, y:0, file:null } }
 
-// ── 移动端长按 ────────────────────────────────────
-let longPressTimer = null
-let touchMoved = false
-function onTouchStart(e, file) {
-  touchMoved = false
-  if (file.is_dir) return  // 文件夹：普通点击导航，不需要长按菜单
-  longPressTimer = setTimeout(() => {
-    if (!touchMoved) {
-      const menuW = 210
-      const x = window.innerWidth - menuW - 8
-      const y = 85
-      ctxMenu.value = { show:true, x, y, file }
-    }
-  }, 500)
-}
-function onTouchEnd() {
-  clearTimeout(longPressTimer)
-}
-function onTouchMove() {
-  touchMoved = true
-  clearTimeout(longPressTimer)
-}
+// 移动端长按已移除，轻点通过 @click 触发 handleRowClick
 
 async function ctxAction(action) {
   const file = ctxMenu.value.file

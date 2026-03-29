@@ -1672,8 +1672,9 @@ func copyPath(src, dst string) error {
 	return err
 }
 
-// DetectFileType 用 `file` 命令检测文件是否为文本类型
-// 返回 {"text": true/false}
+// DetectFileType 检测文件是否为可编辑的文本文件
+// 策略：读取前 8KB，无 NUL 字节且内容可合法解析为 UTF-8/Latin-1 则视为文本
+// file 命令仅作为辅助参考，不作为决定性依据（避免无后缀配置文件误判为二进制）
 func (h *Handler) DetectFileType(c *gin.Context) {
 	path := c.Query("path")
 	absPath, err := h.files.AbsPath(path)
@@ -1681,47 +1682,42 @@ func (h *Handler) DetectFileType(c *gin.Context) {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-	out, err := exec.Command("file", "--mime-type", "-b", absPath).Output()
-	if err != nil {
-		// file 命令不可用时，尝试读取前 512 字节判断是否含 NUL
-		f, ferr := os.Open(absPath)
-		if ferr != nil {
-			c.JSON(500, gin.H{"error": ferr.Error()})
-			return
-		}
-		defer f.Close()
-		buf := make([]byte, 512)
-		n, _ := f.Read(buf)
-		for _, b := range buf[:n] {
-			if b == 0 {
-				c.JSON(200, gin.H{"text": false})
-				return
-			}
-		}
-		c.JSON(200, gin.H{"text": true})
+
+	f, ferr := os.Open(absPath)
+	if ferr != nil {
+		c.JSON(500, gin.H{"error": ferr.Error()})
 		return
 	}
-	mimeType := strings.TrimSpace(string(out))
-	isText := strings.HasPrefix(mimeType, "text/") ||
-		strings.Contains(mimeType, "json") ||
-		strings.Contains(mimeType, "xml") ||
-		strings.Contains(mimeType, "javascript") ||
-		strings.Contains(mimeType, "x-sh") ||
-		strings.Contains(mimeType, "x-python") ||
-		strings.Contains(mimeType, "x-ruby") ||
-		strings.Contains(mimeType, "x-perl") ||
-		strings.Contains(mimeType, "x-script") ||
-		mimeType == "application/octet-stream" && func() bool {
-			// octet-stream 再用 NUL 字节判断
-			f, ferr := os.Open(absPath)
-			if ferr != nil { return false }
-			defer f.Close()
-			buf := make([]byte, 512)
-			n, _ := f.Read(buf)
-			for _, b := range buf[:n] {
-				if b == 0 { return false }
+	defer f.Close()
+
+	// 读取前 8KB 进行检测
+	buf := make([]byte, 8192)
+	n, _ := f.Read(buf)
+	sample := buf[:n]
+
+	// 空文件视为文本
+	if n == 0 {
+		c.JSON(200, gin.H{"text": true, "mime": "text/plain"})
+		return
+	}
+
+	// 含 NUL 字节 → 二进制
+	for _, b := range sample {
+		if b == 0 {
+			// 尝试用 file 命令获取 mime 供前端展示
+			mime := "application/octet-stream"
+			if out, err2 := exec.Command("file", "--mime-type", "-b", absPath).Output(); err2 == nil {
+				mime = strings.TrimSpace(string(out))
 			}
-			return true
-		}()
-	c.JSON(200, gin.H{"text": isText, "mime": mimeType})
+			c.JSON(200, gin.H{"text": false, "mime": mime})
+			return
+		}
+	}
+
+	// 无 NUL 字节 → 视为文本（涵盖所有无后缀配置文件、脚本等）
+	mime := "text/plain"
+	if out, err2 := exec.Command("file", "--mime-type", "-b", absPath).Output(); err2 == nil {
+		mime = strings.TrimSpace(string(out))
+	}
+	c.JSON(200, gin.H{"text": true, "mime": mime})
 }
