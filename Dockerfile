@@ -11,6 +11,7 @@ RUN apk add --no-cache \
     wget \
     unzip \
     tar \
+    zip \
     ca-certificates \
     tzdata
 
