@@ -35,16 +35,18 @@ type Handler struct {
 	files        *files.Manager
 	shares       *files.ShareManager
 	confPath     string
-	loginLimiter *loginRateLimiter
+	loginLimiter  *rateLimiter
+	webdavLimiter *rateLimiter
 }
 
 func New(db *gorm.DB, fm *files.Manager, sm *files.ShareManager, confPath string) *Handler {
 	return &Handler{
-		db:           db,
-		files:        fm,
-		shares:       sm,
-		confPath:     confPath,
-		loginLimiter: newLoginRateLimiter(),
+		db:            db,
+		files:         fm,
+		shares:        sm,
+		confPath:      confPath,
+		loginLimiter:  newRateLimiter(5, time.Minute),  // 每 IP 每分钟最多 5 次登录
+		webdavLimiter: newRateLimiter(10, time.Minute), // 每 IP 每分钟最多 10 次 WebDAV 认证
 	}
 }
 
@@ -100,7 +102,7 @@ func (h *Handler) Setup(c *gin.Context) {
 
 func (h *Handler) Login(c *gin.Context) {
 	// 频率限制：同一 IP 每分钟最多 5 次
-	if !h.loginLimiter.Allow(c.ClientIP()) {
+	if !h.loginLimiter.Allow(GinRealIP(c)) {
 		c.JSON(429, gin.H{"error": "too many login attempts, please try again later"})
 		return
 	}
@@ -1421,6 +1423,12 @@ func (h *Handler) WebDAVMiddleware() gin.HandlerFunc {
 		if !ok {
 			c.Header("WWW-Authenticate", `Basic realm="CloudOne WebDAV"`)
 			c.AbortWithStatus(401)
+			return
+		}
+		// WebDAV 频率限制：每 IP 每分钟最多 10 次认证尝试
+		if !h.webdavLimiter.Allow(GinRealIP(c)) {
+			c.Header("WWW-Authenticate", `Basic realm="CloudOne WebDAV"`)
+			c.AbortWithStatus(429)
 			return
 		}
 		// 校验用户名
