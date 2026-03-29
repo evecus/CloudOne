@@ -1,12 +1,26 @@
 <template>
   <div class="cm-editor-wrap" :class="{ 'cm-focused': isFocused }">
     <div class="cm-lang-badge" v-if="langLabel">{{ langLabel }}</div>
-    <div ref="editorEl" class="cm-editor-container"></div>
+
+    <!-- 选择模式：原生 textarea，浏览器长按/划选完全正常 -->
+    <textarea
+      v-if="readonly"
+      class="select-textarea"
+      :value="modelValue"
+      readonly
+      spellcheck="false"
+      autocomplete="off"
+      autocorrect="off"
+      autocapitalize="off"
+    ></textarea>
+
+    <!-- 编辑模式：CodeMirror -->
+    <div v-else ref="editorEl" class="cm-editor-container"></div>
   </div>
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onBeforeUnmount, shallowRef } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount, shallowRef, nextTick } from 'vue'
 import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightSpecialChars, drawSelection, highlightActiveLine } from '@codemirror/view'
 import { EditorState, Compartment } from '@codemirror/state'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
@@ -36,11 +50,9 @@ const editorEl  = ref(null)
 const isFocused = ref(false)
 const view      = shallowRef(null)
 const langCompartment = new Compartment()
-const editableCompartment = new Compartment()
 
 // ── 语言检测 ────────────────────────────────────────────
 const LANG_MAP = {
-  // JavaScript 家族
   js:    { lang: () => javascript(),                    label: 'JavaScript' },
   mjs:   { lang: () => javascript(),                    label: 'JavaScript' },
   cjs:   { lang: () => javascript(),                    label: 'JavaScript' },
@@ -48,27 +60,22 @@ const LANG_MAP = {
   tsx:   { lang: () => javascript({ typescript: true, jsx: true }), label: 'TSX' },
   jsx:   { lang: () => javascript({ jsx: true }),       label: 'JSX' },
   vue:   { lang: () => html(),                          label: 'Vue' },
-  // 样式
   css:   { lang: () => css(),                           label: 'CSS' },
   scss:  { lang: () => css(),                           label: 'SCSS' },
   sass:  { lang: () => css(),                           label: 'Sass' },
   less:  { lang: () => css(),                           label: 'Less' },
-  // 标记语言
   html:  { lang: () => html(),                          label: 'HTML' },
   htm:   { lang: () => html(),                          label: 'HTML' },
   xml:   { lang: () => xml(),                           label: 'XML' },
   svg:   { lang: () => xml(),                           label: 'SVG' },
-  // 数据格式
   json:  { lang: () => json(),                          label: 'JSON' },
   jsonc: { lang: () => json(),                          label: 'JSONC' },
   json5: { lang: () => json(),                          label: 'JSON5' },
   yaml:  { lang: () => [],                              label: 'YAML' },
   yml:   { lang: () => [],                              label: 'YAML' },
   toml:  { lang: () => [],                              label: 'TOML' },
-  // 文档
   md:        { lang: () => markdown(),                  label: 'Markdown' },
   markdown:  { lang: () => markdown(),                  label: 'Markdown' },
-  // 编程语言
   py:    { lang: () => python(),                        label: 'Python' },
   go:    { lang: () => go(),                            label: 'Go' },
   java:  { lang: () => java(),                          label: 'Java' },
@@ -79,18 +86,15 @@ const LANG_MAP = {
   h:     { lang: () => cpp(),                           label: 'C/C++ Header' },
   hpp:   { lang: () => cpp(),                           label: 'C++ Header' },
   php:   { lang: () => php(),                           label: 'PHP' },
-  // Shell
   sh:    { lang: () => [],                              label: 'Shell' },
   bash:  { lang: () => [],                              label: 'Bash' },
   zsh:   { lang: () => [],                              label: 'Zsh' },
   fish:  { lang: () => [],                              label: 'Fish' },
-  // 数据库
   sql:   { lang: () => sql(),                           label: 'SQL' },
 }
 
 function getExtInfo(filename) {
   if (!filename) return null
-  // 特殊无扩展名文件
   const base = filename.split('/').pop().toLowerCase()
   if (['dockerfile'].includes(base)) return { lang: () => [], label: 'Dockerfile' }
   if (['makefile', 'gnumakefile'].includes(base)) return { lang: () => [], label: 'Makefile' }
@@ -109,7 +113,7 @@ function getLangExtension(filename) {
   return Array.isArray(ext) ? ext : [ext]
 }
 
-// ── 主题：亮色，风格和项目 UI 统一 ─────────────────────
+// ── 主题 ────────────────────────────────────────────────
 const lightTheme = EditorView.theme({
   '&': {
     fontSize: '15px',
@@ -153,10 +157,10 @@ const lightTheme = EditorView.theme({
   '.cm-foldGutter .cm-gutterElement': { padding: '0 2px', cursor: 'pointer' },
 }, { dark: false })
 
-// ── 初始化编辑器 ────────────────────────────────────────
-onMounted(() => {
+// ── CodeMirror 初始化/销毁 ───────────────────────────────
+function mountEditor() {
+  if (!editorEl.value || view.value) return
   const langExts = getLangExtension(props.filename)
-
   const state = EditorState.create({
     doc: props.modelValue,
     extensions: [
@@ -170,7 +174,6 @@ onMounted(() => {
       indentOnInput(),
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
       bracketMatching(),
-
       highlightActiveLine(),
       keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
       lightTheme,
@@ -184,19 +187,42 @@ onMounted(() => {
         isFocused.value = focusing
         return null
       }),
-      editableCompartment.of(EditorView.editable.of(!props.readonly)),
       EditorView.lineWrapping,
     ],
   })
-
   view.value = new EditorView({ state, parent: editorEl.value })
+}
+
+function destroyEditor() {
+  if (view.value) {
+    view.value.destroy()
+    view.value = null
+  }
+  isFocused.value = false
+}
+
+onMounted(() => {
+  if (!props.readonly) mountEditor()
 })
 
 onBeforeUnmount(() => {
-  view.value?.destroy()
+  destroyEditor()
 })
 
-// 外部 v-model 变更时同步内容（避免循环）
+// readonly 切换：在编辑模式和 textarea 模式之间互切
+watch(() => props.readonly, async (isReadonly) => {
+  if (isReadonly) {
+    // 切到选择模式：销毁 CodeMirror，让 textarea 接管
+    destroyEditor()
+  } else {
+    // 切回编辑模式：等 DOM 更新后重建 CodeMirror
+    await nextTick()
+    mountEditor()
+    // 把 textarea 期间没有变化的内容同步进去（内容由 v-model 传入，无需额外处理）
+  }
+})
+
+// 外部 v-model 变更时同步（编辑模式下）
 watch(() => props.modelValue, (val) => {
   if (!view.value) return
   const current = view.value.state.doc.toString()
@@ -215,14 +241,6 @@ watch(() => props.filename, (name) => {
     effects: langCompartment.reconfigure(langExts)
   })
 })
-
-// readonly 变更时动态切换可编辑状态
-watch(() => props.readonly, (val) => {
-  if (!view.value) return
-  view.value.dispatch({
-    effects: editableCompartment.reconfigure(EditorView.editable.of(!val))
-  })
-})
 </script>
 
 <style scoped>
@@ -238,7 +256,6 @@ watch(() => props.readonly, (val) => {
   transition: border-color .2s, box-shadow .2s;
   min-height: 0;
   position: relative;
-  /* 给 CodeMirror 一个明确的高度锚点 */
   height: 100%;
 }
 .cm-editor-wrap.cm-focused {
@@ -264,6 +281,32 @@ watch(() => props.readonly, (val) => {
   user-select: none;
 }
 
+/* ── 选择模式：原生 textarea ── */
+.select-textarea {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  padding: 14px 16px;
+  border: none;
+  outline: none;
+  resize: none;
+  background: #fff;
+  color: #1E293B;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.65;
+  overflow: auto;
+  /* 原生选择，不拦截任何触摸事件 */
+  -webkit-user-select: text;
+  user-select: text;
+  touch-action: auto;
+  cursor: text;
+  /* 视觉提示：只读背景 */
+  background: #F8FAFC;
+}
+
+/* ── CodeMirror 容器 ── */
 .cm-editor-container {
   flex: 1;
   overflow: hidden;
@@ -272,8 +315,6 @@ watch(() => props.readonly, (val) => {
   min-height: 0;
   height: 100%;
 }
-
-/* CodeMirror 的根元素需要填满容器并允许滚动 */
 .cm-editor-container :deep(.cm-editor) {
   height: 100%;
   width: 100%;
@@ -284,19 +325,15 @@ watch(() => props.readonly, (val) => {
   overflow: auto !important;
   -webkit-overflow-scrolling: touch;
 }
-/* 文字加粗，提高可读性 */
 .cm-editor-container :deep(.cm-content) {
   font-weight: 500;
   -webkit-font-smoothing: auto;
   font-smooth: auto;
-  /* 确保桌面端鼠标可以正常选择文字 */
   -webkit-user-select: text;
   user-select: text;
   cursor: text;
-  /* 让浏览器原生处理触摸事件（长按选择文本） */
   touch-action: auto;
 }
-/* 行号不加粗 */
 .cm-editor-container :deep(.cm-gutterElement) {
   font-weight: 400;
 }
@@ -312,17 +349,14 @@ watch(() => props.readonly, (val) => {
   .cm-editor-container :deep(.cm-content) {
     font-size: 14px;
     font-weight: 500;
-    /* 允许原生长按选择文本，方便复制 */
     -webkit-user-select: text !important;
     user-select: text !important;
     touch-action: auto !important;
     cursor: text !important;
   }
-  /* 选中文字高亮保持可见 */
   .cm-editor-container :deep(.cm-selectionBackground) {
     background: #BFDBFE !important;
   }
-  /* 移动端行号缩窄 */
   .cm-editor-container :deep(.cm-lineNumbers .cm-gutterElement) {
     min-width: 26px;
     padding: 0 6px 0 4px;
@@ -334,10 +368,12 @@ watch(() => props.readonly, (val) => {
     top: 6px;
     right: 8px;
   }
+  .select-textarea {
+    font-size: 14px;
+  }
 }
 
 @media (max-width: 480px) {
-  /* 极小屏隐藏行号，节省横向空间 */
   .cm-editor-container :deep(.cm-gutters) {
     display: none;
   }
