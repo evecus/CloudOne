@@ -176,6 +176,8 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery())
+	// 不信任任何代理的 IP 转发头，IP 真实性由 handler.GinRealIP 自行判断
+	r.SetTrustedProxies(nil)
 	r.RedirectTrailingSlash = false
 	r.RedirectFixedPath = false
 
