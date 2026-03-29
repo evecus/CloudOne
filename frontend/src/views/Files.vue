@@ -364,12 +364,12 @@
           <div v-if="uploadProgress.length && !uploadDone" class="compress-progress">
             <div class="spinner-sm"></div><span>{{ lang==='zh'?'上传中...':'Uploading...' }}</span>
           </div>
-          <div class="modal-actions">
-            <button class="btn-ghost" @click="showUpload=false;stagedFiles=[];uploadDone=false">{{ t.cancel }}</button>
+          <div class="modal-actions modal-actions-center">
             <button v-if="stagedFiles.length" class="btn-primary-sm" :disabled="uploadDone" @click="doStagedUpload">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               {{ lang==='zh'?`上传 (${stagedFiles.length} 个)`:`Upload (${stagedFiles.length})` }}
             </button>
+            <button class="btn-ghost" @click="showUpload=false;stagedFiles=[];uploadDone=false;uploadProgress=[]">{{ t.cancel }}</button>
           </div>
         </div>
       </div>
@@ -391,12 +391,12 @@
           <div v-if="folderUploading" class="compress-progress">
             <div class="spinner-sm"></div><span>{{ lang==='zh'?'上传中...':'Uploading...' }}</span>
           </div>
-          <div class="modal-actions">
-            <button class="btn-ghost" @click="showFolderUpload=false;stagedFolderFiles=[];folderUploadDone=false">{{ t.cancel }}</button>
+          <div class="modal-actions modal-actions-center">
             <button v-if="stagedFolderFiles.length" class="btn-primary-sm" :disabled="folderUploading||folderUploadDone" @click="doFolderUpload">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
               {{ lang==='zh'?`上传文件夹`:`Upload Folder` }}
             </button>
+            <button class="btn-ghost" @click="showFolderUpload=false;stagedFolderFiles=[];folderUploadDone=false">{{ t.cancel }}</button>
           </div>
         </div>
       </div>
@@ -412,9 +412,9 @@
               <span style="font-size:12px;color:#f59e0b">{{ lang==='zh'?'已存在':'exists' }}</span>
             </div>
           </div>
-          <div class="modal-actions">
-            <button class="btn-ghost" @click="showUploadConflict=false;pendingUploadForm=null">{{ t.cancel }}</button>
+          <div class="modal-actions modal-actions-center">
             <button class="btn-primary-sm" @click="confirmOverwriteUpload">{{ lang==='zh'?'覆盖上传':'Overwrite' }}</button>
+            <button class="btn-ghost" @click="showUploadConflict=false;pendingUploadForm=null">{{ t.cancel }}</button>
           </div>
         </div>
       </div>
@@ -424,9 +424,9 @@
         <div class="modal modal-md">
           <h3>{{ t.newFolder }}</h3>
           <div class="field"><label>{{ t.folderName }}</label><input v-model="newDirName" type="text" @keyup.enter="doMkdir" autofocus /></div>
-          <div class="modal-actions">
-            <button class="btn-ghost" @click="showMkdir=false">{{ t.cancel }}</button>
+          <div class="modal-actions modal-actions-center">
             <button class="btn-primary-sm" @click="doMkdir">{{ t.create }}</button>
+            <button class="btn-ghost" @click="showMkdir=false">{{ t.cancel }}</button>
           </div>
         </div>
       </div>
@@ -436,10 +436,10 @@
         <div class="modal modal-md">
           <h3>{{ t.createFileTitle }}</h3>
           <div class="field"><label>{{ t.fileName }}</label><input ref="createFileInput" v-model="newFile.name" type="text" @keyup.enter="doCreateFile" autofocus /></div>
-          <div class="modal-actions">
-            <button class="btn-ghost" @click="showCreate=false">{{ t.cancel }}</button>
-            <button class="btn-ghost" @click="doCreateFile">{{ t.create }}</button>
+          <div class="modal-actions create-file-actions">
             <button class="btn-primary-sm" @click="doCreateAndOpen">{{ lang==='zh'?'打开':'Open' }}</button>
+            <button class="btn-ghost" @click="doCreateFile">{{ t.create }}</button>
+            <button class="btn-ghost" @click="showCreate=false">{{ t.cancel }}</button>
           </div>
         </div>
       </div>
@@ -471,9 +471,9 @@
             </div>
           </div>
           <div class="perm-octal"><span>{{ t.permissions }}:</span><code>{{ permOctal }}</code></div>
-          <div class="modal-actions">
-            <button class="btn-ghost" @click="showChmod=false">{{ t.cancel }}</button>
+          <div class="modal-actions modal-actions-center">
             <button class="btn-primary-sm" @click="doChmod">{{ t.permApply }}</button>
+            <button class="btn-ghost" @click="showChmod=false">{{ t.cancel }}</button>
           </div>
         </div>
       </div>
@@ -494,9 +494,9 @@
               autocomplete="off"
             />
           </div>
-          <div class="modal-actions rename-actions">
-            <button class="btn-ghost" @click="showRename=false">{{ t.cancel }}</button>
+          <div class="modal-actions rename-actions modal-actions-center">
             <button class="btn-primary-sm" @click="doRename" :disabled="!renameValue.trim() || renameValue.trim()===renameTarget?.name">{{ t.save }}</button>
+            <button class="btn-ghost" @click="showRename=false">{{ t.cancel }}</button>
           </div>
         </div>
       </div>
@@ -506,12 +506,12 @@
         <div class="modal modal-sm">
           <h3>{{ lang==='zh'?'确认解压':'Confirm Extract' }}</h3>
           <p class="modal-desc">{{ lang==='zh'?`将解压 "${extractTarget?.name}" 到当前目录`:`Extract "${extractTarget?.name}" to current folder?` }}</p>
-          <div class="modal-actions">
-            <button class="btn-ghost" @click="extractTarget=null">{{ t.cancel }}</button>
+          <div class="modal-actions modal-actions-center">
             <button class="btn-primary-sm" @click="doExtract">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M21 8l-4-4H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V8z"/><polyline points="17 4 17 8 21 8"/><polyline points="12 18 12 12"/><polyline points="9 15 12 18 15 15"/></svg>
               {{ lang==='zh'?'解压':'Extract' }}
             </button>
+            <button class="btn-ghost" @click="extractTarget=null">{{ t.cancel }}</button>
           </div>
         </div>
       </div>
@@ -521,9 +521,9 @@
         <div class="modal modal-sm">
           <h3>{{ t.confirmDelete }}</h3>
           <p class="modal-desc">{{ t.deleteWarning }}</p>
-          <div class="modal-actions">
-            <button class="btn-ghost" @click="deleteTarget=null">{{ t.cancel }}</button>
+          <div class="modal-actions modal-actions-center">
             <button class="btn-danger" @click="doDelete">{{ t.confirm }}</button>
+            <button class="btn-ghost" @click="deleteTarget=null">{{ t.cancel }}</button>
           </div>
         </div>
       </div>
@@ -612,9 +612,9 @@
         <div class="modal modal-sm">
           <h3>{{ t.confirmBatchDelete }}</h3>
           <p class="modal-desc">{{ batchDeleteWarningText }}</p>
-          <div class="modal-actions">
-            <button class="btn-ghost" @click="showBatchDelete=false">{{ t.cancel }}</button>
+          <div class="modal-actions modal-actions-center">
             <button class="btn-danger" @click="doBatchDelete">{{ t.confirm }}</button>
+            <button class="btn-ghost" @click="showBatchDelete=false">{{ t.cancel }}</button>
           </div>
         </div>
       </div>
@@ -628,23 +628,23 @@
             <p class="modal-desc" style="margin-bottom:8px">
               {{ shareTarget?.name }}
             </p>
-            <div class="modal-actions">
-              <button class="btn-ghost" @click="showShareModal=false">{{ t.cancel }}</button>
+            <div class="modal-actions modal-actions-center">
               <button class="btn-primary-sm" @click="doCreateShare">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
                 {{ lang==='zh'?'保存':'Save' }}
               </button>
+              <button class="btn-ghost" @click="showShareModal=false">{{ t.cancel }}</button>
             </div>
           </template>
           <!-- 第二步：分享已创建，显示链接 -->
           <template v-else>
             <div class="share-link-box"><input readonly :value="shareUrl" class="share-input"/></div>
-            <div class="modal-actions">
-              <button class="btn-ghost" @click="showShareModal=false;shareResult=null">{{ t.cancel }}</button>
+            <div class="modal-actions modal-actions-center">
               <button class="btn-primary-sm" @click="copyShareAndClose">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
                 {{ t.copyLink }}
               </button>
+              <button class="btn-ghost" @click="showShareModal=false;shareResult=null">{{ t.cancel }}</button>
             </div>
           </template>
         </div>
@@ -666,8 +666,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;flex-shrink:0;color:#F59E0B"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             {{ t.confirmSetPublicNote }}
           </p>
-          <div class="modal-actions">
-            <button class="btn-ghost" @click="showVisibilityConfirm=false">{{ t.cancel }}</button>
+          <div class="modal-actions modal-actions-center">
             <button
               :class="visibilityTarget?.is_public ? 'btn-danger' : 'btn-primary-sm'"
               @click="doTogglePublic"
@@ -675,6 +674,7 @@
               <svg v-if="!visibilityTarget?.is_public" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
               {{ visibilityTarget?.is_public ? t.setPrivate : t.setPublic }}
             </button>
+            <button class="btn-ghost" @click="showVisibilityConfirm=false">{{ t.cancel }}</button>
           </div>
         </div>
       </div>
@@ -717,8 +717,7 @@
               <div v-if="!dirTreeItems.length" class="dir-tree-empty">{{ lang==='zh'?'无子目录':'No subdirectories' }}</div>
             </template>
           </div>
-          <div class="modal-actions">
-            <button class="btn-ghost" @click="showDirModal=false">{{ t.cancel }}</button>
+          <div class="modal-actions modal-actions-center">
             <button class="btn-primary-sm" :disabled="moveTargetConflict" @click="confirmDirAction">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px">
                 <polyline v-if="dirModalMode==='move'" points="5 9 2 12 5 15"/><polyline v-if="dirModalMode==='move'" points="9 5 12 2 15 5"/><line v-if="dirModalMode==='move'" x1="2" y1="12" x2="22" y2="12"/><line v-if="dirModalMode==='move'" x1="12" y1="2" x2="12" y2="22"/>
@@ -726,6 +725,7 @@
               </svg>
               {{ lang==='zh'?(dirModalMode==='move'?'移动到此处':'复制到此处'):(dirModalMode==='move'?'Move Here':'Copy Here') }}
             </button>
+            <button class="btn-ghost" @click="showDirModal=false">{{ t.cancel }}</button>
           </div>
         </div>
       </div>
@@ -752,12 +752,12 @@
           <div v-if="compressing" class="compress-progress">
             <div class="spinner-sm"></div><span>{{ lang==='zh'?'正在压缩...':'Compressing...' }}</span>
           </div>
-          <div class="modal-actions">
-            <button class="btn-ghost" @click="exitSelectAndClose('compress')">{{ t.cancel }}</button>
+          <div class="modal-actions modal-actions-center">
             <button class="btn-primary-sm" :disabled="compressing" @click="doCompress">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M21 8l-4-4H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V8z"/><polyline points="17 4 17 8 21 8"/></svg>
               {{ t.confirm }}
             </button>
+            <button class="btn-ghost" @click="exitSelectAndClose('compress')">{{ t.cancel }}</button>
           </div>
         </div>
       </div>
@@ -793,13 +793,13 @@
             <strong>{{ searchScopeDisplay }}</strong>
             <span style="color:var(--gray-400)"> {{ t.searchScopeDir }}</span>
           </div>
-          <div class="modal-actions">
-            <button class="btn-ghost" @click="showSearch=false;searchName='';searchDirInput=''">{{ t.cancel }}</button>
+          <div class="modal-actions modal-actions-center">
             <button class="btn-primary-sm" :disabled="searching||!searchName.trim()" @click="doSearch">
               <svg v-if="searching" class="spin-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
               <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               {{ searching ? t.searching : t.search }}
             </button>
+            <button class="btn-ghost" @click="showSearch=false;searchName='';searchDirInput=''">{{ t.cancel }}</button>
           </div>
         </div>
       </div>
@@ -828,12 +828,12 @@
               </div>
             </div>
           </div>
-          <div class="modal-actions">
-            <button class="btn-ghost" @click="showSearchResult=false; searchSelected=null">{{ t.cancel }}</button>
+          <div class="modal-actions modal-actions-center">
             <button v-if="searchSelected" class="btn-primary-sm" @click="jumpToSearchResult">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><polyline points="9 18 15 12 9 6"/></svg>
               {{ t.searchJump }}
             </button>
+            <button class="btn-ghost" @click="showSearchResult=false;searchSelected=null">{{ t.cancel }}</button>
           </div>
         </div>
       </div>
@@ -854,12 +854,12 @@
             <div class="spinner-sm"></div><span>{{ t.fetching }}</span>
           </div>
           <div v-if="fetchError" class="fetch-error">{{ fetchError }}</div>
-          <div class="modal-actions">
-            <button class="btn-ghost" @click="showFetch=false;fetchError=''">{{ t.cancel }}</button>
+          <div class="modal-actions modal-actions-center">
             <button class="btn-primary-sm" :disabled="fetching||!fetchForm.url" @click="doFetch">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               {{ t.confirm }}
             </button>
+            <button class="btn-ghost" @click="showFetch=false;fetchError=''">{{ t.cancel }}</button>
           </div>
         </div>
       </div>
@@ -1886,18 +1886,18 @@ watch(() => _route.params.pathMatch, (val) => {
 .modal-bg-fullscreen { align-items:center; justify-content:center; }
 .modal-xl { width:900px; min-height:600px; max-height:92vh; display:flex; flex-direction:column; padding:0 !important; background:#F8FAFC; border-radius:20px; box-shadow:var(--shadow-lg); animation:modalIn .2s cubic-bezier(.4,0,.2,1); overflow:hidden; }
 .modal-unsupported { width:440px; max-width:90vw; max-height:90vh; display:flex; flex-direction:column; padding:0 !important; background:#F8FAFC; border-radius:20px; box-shadow:var(--shadow-lg); animation:modalIn .2s cubic-bezier(.4,0,.2,1); overflow:hidden; }
-.modal-move { width:900px; max-width:92vw; max-height:88vh; display:flex; flex-direction:column; border-radius:20px; box-shadow:var(--shadow-lg); animation:modalIn .2s cubic-bezier(.4,0,.2,1); overflow:hidden; background:white; padding:28px !important; }
+.modal-move { width:680px; max-width:92vw; min-height:420px; max-height:88vh; display:flex; flex-direction:column; border-radius:20px; box-shadow:var(--shadow-lg); animation:modalIn .2s cubic-bezier(.4,0,.2,1); overflow:hidden; background:white; padding:24px !important; }
 .modal-xl .modal-titlebar, .modal-unsupported .modal-titlebar { padding:14px 20px 12px; border-bottom:1.5px solid var(--gray-200); margin-bottom:0; background:#F1F5F9; border-radius:20px 20px 0 0; }
 .modal-xl .field { padding:0; margin:0; background:#F8FAFC; flex:1; display:flex; flex-direction:column; }
 .modal-xl .modal-actions, .modal-unsupported .modal-actions { padding:10px 20px; border-top:1.5px solid var(--gray-200); background:#F1F5F9; margin-top:0; border-radius:0 0 20px 20px; }
 
 /* 层级2：中等（有输入/信息多，居中） */
 .modal-bg-centered { align-items:center; justify-content:center; }
-.modal { background:white; border-radius:20px; padding:32px; box-shadow:var(--shadow-lg); animation:modalIn .2s cubic-bezier(.4,0,.2,1); overflow:hidden; display:flex; flex-direction:column; }
-.modal-md { width:520px; max-width:90vw; max-height:90vh; overflow-y:auto; }
+.modal { background:white; border-radius:20px; padding:28px 28px 24px; box-shadow:var(--shadow-lg); animation:modalIn .2s cubic-bezier(.4,0,.2,1); overflow:hidden; display:flex; flex-direction:column; }
+.modal-md { width:480px; max-width:90vw; min-height:220px; max-height:90vh; overflow-y:auto; }
 
 /* 层级3：小提示（确认框，居中，统一尺寸） */
-.modal-sm { width:400px; max-width:90vw; max-height:90vh; overflow-y:auto; }
+.modal-sm { width:400px; max-width:90vw; min-height:180px; max-height:90vh; overflow-y:auto; }
 
 @keyframes modalIn { from{opacity:0;transform:scale(.95) translateY(8px)} to{opacity:1;transform:scale(1) translateY(0)} }
 .modal-titlebar { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
@@ -1907,9 +1907,11 @@ watch(() => _route.params.pathMatch, (val) => {
 .icon-close:hover { background:var(--gray-200); }
 .edit-filename { font-weight:400; color:var(--gray-500); font-family:'JetBrains Mono',monospace; font-size:14px; }
 .edit-error { font-size:14px; color:#EF4444; padding:12px; background:rgba(239,68,68,.08); border-radius:8px; margin-bottom:16px; }
-.modal h3 { font-size:18px; font-weight:600; color:var(--gray-800); margin-bottom:20px; }
-.modal-desc { font-size:14px; color:var(--gray-500); margin-bottom:24px; }
-.modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:20px; flex-shrink:0; }
+.modal h3 { font-size:17px; font-weight:700; color:var(--gray-800); margin-bottom:16px; text-align:center; }
+.modal-desc { font-size:14px; color:var(--gray-500); margin-bottom:16px; text-align:center; line-height:1.6; }
+.modal-actions { display:flex; gap:10px; justify-content:center; margin-top:16px; flex-shrink:0; flex-wrap:wrap; }
+.modal-actions-center { justify-content:center; }
+.modal-actions .btn-ghost, .modal-actions .btn-primary-sm, .modal-actions .btn-danger { min-width:96px; justify-content:center; }
 .btn-ghost { padding:9px 18px; border:1.5px solid var(--gray-200); border-radius:var(--radius-sm); background:transparent; color:var(--gray-600); font-size:14px; font-weight:500; font-family:inherit; cursor:pointer; transition:var(--transition); }
 .btn-ghost:hover { background:var(--gray-50); }
 .btn-primary-sm { display:flex; align-items:center; gap:6px; padding:9px 18px; background:var(--primary-gradient); color:white; border:none; border-radius:var(--radius-sm); font-size:14px; font-weight:600; font-family:inherit; cursor:pointer; transition:var(--transition); box-shadow:var(--primary-shadow); }
@@ -2214,7 +2216,7 @@ watch(() => _route.params.pathMatch, (val) => {
     width:100% !important; max-width:100% !important;
     height:100% !important; max-height:100% !important;
     border-radius:0 !important; margin:0 !important;
-    padding:20px 16px !important;
+    padding:16px !important;
     overflow-y:auto;
   }
   /* 移动端编辑框：编辑区占满 */
@@ -2234,20 +2236,22 @@ watch(() => _route.params.pathMatch, (val) => {
   /* 层级2：中等（居中，适配宽度）*/
   .modal-bg-centered { align-items:center; justify-content:center; padding:16px; }
   .modal-md {
-    width:100% !important; max-width:480px !important;
-    max-height:88vh; overflow-y:auto;
-    border-radius:20px !important;
-    padding:24px 20px !important;
+    width:100% !important; max-width:440px !important;
+    max-height:85vh; overflow-y:auto;
+    border-radius:18px !important;
+    padding:22px 18px 20px !important;
   }
 
   /* 层级3：小提示（居中，固定宽度）*/
   .modal-sm {
-    width:100% !important; max-width:360px !important;
-    max-height:80vh; overflow-y:auto;
-    border-radius:18px !important;
-    padding:24px 20px !important;
+    width:100% !important; max-width:340px !important;
+    max-height:75vh; overflow-y:auto;
+    border-radius:16px !important;
+    padding:22px 18px 18px !important;
   }
 
+  .modal-actions { gap:8px; }
+  .modal-actions .btn-ghost, .modal-actions .btn-primary-sm, .modal-actions .btn-danger { flex:1; min-width:0; padding:11px 12px; font-size:14px; }
   .modal .field input { font-size:16px; }
   .dir-tree { max-height:200px; }
   .ctx-menu { min-width:180px; }
@@ -2317,6 +2321,17 @@ watch(() => _route.params.pathMatch, (val) => {
   border-color: var(--primary);
   background: white;
   box-shadow: 0 0 0 3px rgba(37,99,235,.08);
+}
+.create-file-actions {
+  justify-content: center !important;
+  gap: 10px !important;
+  flex-wrap: nowrap !important;
+}
+.create-file-actions .btn-primary-sm,
+.create-file-actions .btn-ghost {
+  flex: 0 0 auto !important;
+  min-width: 80px !important;
+  width: auto !important;
 }
 .rename-actions {
   justify-content: center !important;
