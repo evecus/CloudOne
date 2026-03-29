@@ -22,6 +22,13 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
           {{ saveError }}
         </span>
+        <button v-if="mode === 'text' || forceText" class="btn-copy-all" @click="copyAll" :title="lang==='zh'?'复制全部内容':'Copy all'">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+          </svg>
+          <span class="btn-copy-label">{{ copyDone ? (lang==='zh'?'已复制':'Copied!') : (lang==='zh'?'复制全部':'Copy All') }}</span>
+        </button>
         <button v-if="mode === 'text' || forceText" class="btn-save" @click="doSave" :disabled="saving">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
@@ -117,6 +124,29 @@ const previewUrl   = ref('')
 const saving    = ref(false)
 const saved     = ref(false)
 const saveError = ref('')
+const copyDone  = ref(false)
+let copyTimer   = null
+
+async function copyAll() {
+  try {
+    await navigator.clipboard.writeText(content.value)
+    copyDone.value = true
+    clearTimeout(copyTimer)
+    copyTimer = setTimeout(() => { copyDone.value = false }, 2000)
+  } catch {
+    // clipboard API 不可用时 fallback
+    const ta = document.createElement('textarea')
+    ta.value = content.value
+    ta.style.cssText = 'position:fixed;opacity:0'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+    copyDone.value = true
+    clearTimeout(copyTimer)
+    copyTimer = setTimeout(() => { copyDone.value = false }, 2000)
+  }
+}
 
 let savedTimer = null
 
@@ -232,6 +262,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
   if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
   clearTimeout(savedTimer)
+  clearTimeout(copyTimer)
 })
 </script>
 
@@ -317,6 +348,22 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
 }
 
+.btn-copy-all {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: 8px;
+  border: 1px solid var(--gray-300, #CBD5E1);
+  background: #fff;
+  color: var(--gray-700, #334155);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.btn-copy-all:hover { background: var(--gray-50); border-color: var(--blue-300, #93C5FD); color: var(--blue-600, #2563EB); }
+.btn-copy-all svg { width: 15px; height: 15px; flex-shrink: 0; }
 .btn-save {
   display: flex;
   align-items: center;
@@ -449,6 +496,8 @@ onBeforeUnmount(() => {
   .editor-filepath { display: none; }
   .btn-save { padding: 7px 12px; font-size: 13px; }
   .btn-save svg { display: none; }
+  .btn-copy-all { padding: 7px 10px; }
+  .btn-copy-label { display: none; }
   .editor-body { padding: 10px; }
 }
 </style>

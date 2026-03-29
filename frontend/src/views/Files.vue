@@ -438,7 +438,8 @@
           <div class="field"><label>{{ t.fileName }}</label><input ref="createFileInput" v-model="newFile.name" type="text" @keyup.enter="doCreateFile" autofocus /></div>
           <div class="modal-actions">
             <button class="btn-ghost" @click="showCreate=false">{{ t.cancel }}</button>
-            <button class="btn-primary-sm" @click="doCreateFile">{{ t.create }}</button>
+            <button class="btn-ghost" @click="doCreateFile">{{ t.create }}</button>
+            <button class="btn-primary-sm" @click="doCreateAndOpen">{{ lang==='zh'?'打开':'Open' }}</button>
           </div>
         </div>
       </div>
@@ -1559,7 +1560,24 @@ async function doCreateFile() {
     await api.post('/files/create', { path: filePath, content: '' })
     newFile.value = { name: '', content: '' }
     showCreate.value = false
-    // 创建后直接进入编辑页
+    load()  // 刷新文件列表
+  } catch(e) {
+    showToast(e.response?.data?.error || (lang.value==='zh'?'创建失败':'Create failed'))
+  }
+}
+async function doCreateAndOpen() {
+  if (!newFile.value.name.trim()) return
+  const name = newFile.value.name.trim()
+  const conflict = files.value.find(f => f.name === name)
+  if (conflict) {
+    showToast(lang.value==='zh' ? `"${name}" 已存在，请使用其他名称` : `"${name}" already exists`)
+    return
+  }
+  const filePath = currentPath.value.replace(/\/$/, '') + '/' + name
+  try {
+    await api.post('/files/create', { path: filePath, content: '' })
+    newFile.value = { name: '', content: '' }
+    showCreate.value = false
     _router.push('/edit' + filePath)
   } catch(e) {
     showToast(e.response?.data?.error || (lang.value==='zh'?'创建失败':'Create failed'))

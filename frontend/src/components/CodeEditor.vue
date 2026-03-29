@@ -7,7 +7,7 @@
 
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount, shallowRef } from 'vue'
-import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightSpecialChars, drawSelection, dropCursor, highlightActiveLine } from '@codemirror/view'
+import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightSpecialChars, drawSelection, highlightActiveLine } from '@codemirror/view'
 import { EditorState, Compartment } from '@codemirror/state'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, foldGutter, indentOnInput } from '@codemirror/language'
@@ -165,7 +165,6 @@ onMounted(() => {
       history(),
       foldGutter(),
       drawSelection(),
-      dropCursor(),
       EditorState.allowMultipleSelections.of(true),
       indentOnInput(),
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
@@ -284,6 +283,9 @@ watch(() => props.filename, (name) => {
   /* 确保桌面端鼠标可以正常选择文字 */
   -webkit-user-select: text;
   user-select: text;
+  cursor: text;
+  /* 让浏览器原生处理触摸事件（长按选择文本） */
+  touch-action: auto;
 }
 /* 行号不加粗 */
 .cm-editor-container :deep(.cm-gutterElement) {
@@ -304,6 +306,8 @@ watch(() => props.filename, (name) => {
     /* 允许原生长按选择文本，方便复制 */
     -webkit-user-select: text !important;
     user-select: text !important;
+    touch-action: auto !important;
+    cursor: text !important;
   }
   /* 选中文字高亮保持可见 */
   .cm-editor-container :deep(.cm-selectionBackground) {
