@@ -7,9 +7,6 @@ WORKDIR /app
 # 安装必要的运行时依赖
 RUN apk add --no-cache \
     curl \
-    zip \
-    unzip \
-    tar \
     ca-certificates \
     tzdata \
     libc6-compat

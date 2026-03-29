@@ -1,27 +1,32 @@
 package handler
 
 import (
+	"archive/tar"
 	"archive/zip"
-	"bytes"
+	"compress/gzip"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"mime"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cloudone/cloudone/internal/auth"
 	"github.com/cloudone/cloudone/internal/config"
 	"github.com/cloudone/cloudone/internal/files"
+	sshpkg "github.com/cloudone/cloudone/internal/ssh"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -155,13 +160,19 @@ func safeUser(u auth.User) gin.H {
 
 func (h *Handler) AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// WebSocket 连接无法携带 Authorization header，支持 ?token= 查询参数
+		tokenStr := ""
 		header := c.GetHeader("Authorization")
-		if !strings.HasPrefix(header, "Bearer ") {
+		if strings.HasPrefix(header, "Bearer ") {
+			tokenStr = strings.TrimPrefix(header, "Bearer ")
+		} else if q := c.Query("token"); q != "" {
+			tokenStr = q
+		}
+		if tokenStr == "" {
 			c.JSON(401, gin.H{"error": "unauthorized"})
 			c.Abort()
 			return
 		}
-		tokenStr := strings.TrimPrefix(header, "Bearer ")
 		token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
 			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method")
@@ -1073,6 +1084,7 @@ func (h *Handler) CompressFiles(c *gin.Context) {
 			req.Output += ".zip"
 		}
 	}
+
 	outRel := req.Dir + "/" + req.Output
 	outAbs, err := h.files.AbsPath(outRel)
 	if err != nil {
@@ -1084,53 +1096,122 @@ func (h *Handler) CompressFiles(c *gin.Context) {
 		return
 	}
 
-	// 把每个逻辑路径转为相对于 storage root 的相对路径，
-	// 命令从 root 目录执行，压缩包内只保留 basename 起的相对路径，不含绝对路径。
+	// 收集有效绝对路径，保留相对于 storageRoot 的名称作为压缩包内路径
 	storageRoot := h.files.Root()
-	var relArgs []string
+	type srcEntry struct {
+		abs     string
+		arcName string // 压缩包内路径
+	}
+	var entries []srcEntry
 	for _, rel := range req.Paths {
 		abs, err := h.files.AbsPath(rel)
 		if err != nil {
 			continue
 		}
-		// 转为相对于 storageRoot 的路径，作为命令参数
 		relToRoot, err := filepath.Rel(storageRoot, abs)
 		if err != nil {
 			continue
 		}
-		relArgs = append(relArgs, relToRoot)
+		entries = append(entries, srcEntry{abs: abs, arcName: relToRoot})
 	}
-	if len(relArgs) == 0 {
+	if len(entries) == 0 {
 		c.JSON(400, gin.H{"error": "no valid paths"})
 		return
 	}
 
-	var cmd *exec.Cmd
-	switch req.Format {
-	case "zip":
-		// zip -r output.zip file1 dir2 ...  （从 storageRoot 执行）
-		args := append([]string{"-r", outAbs}, relArgs...)
-		cmd = exec.Command("zip", args...)
-	case "tar.gz":
-		// tar -czf output.tar.gz file1 dir2 ...
-		args := append([]string{"-czf", outAbs}, relArgs...)
-		cmd = exec.Command("tar", args...)
-	case "tar":
-		// tar -cf output.tar file1 dir2 ...
-		args := append([]string{"-cf", outAbs}, relArgs...)
-		cmd = exec.Command("tar", args...)
-	}
-
-	// 关键：从 storageRoot 执行，保证压缩包内路径是相对路径
-	cmd.Dir = storageRoot
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	cmd.Stdout = io.Discard
-
-	if err := cmd.Run(); err != nil {
-		c.JSON(500, gin.H{"error": "compress failed: " + stderr.String()})
+	outFile, err := os.Create(outAbs)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "cannot create output file: " + err.Error()})
 		return
 	}
+	defer outFile.Close()
+
+	// 流式写入压缩包，全程无大内存分配
+	switch req.Format {
+	case "zip":
+		zw := zip.NewWriter(outFile)
+		defer zw.Close()
+		var addEntry func(abs, arcName string) error
+		addEntry = func(abs, arcName string) error {
+			info, err := os.Lstat(abs)
+			if err != nil {
+				return nil
+			}
+			if info.IsDir() {
+				des, _ := os.ReadDir(abs)
+				for _, de := range des {
+					addEntry(filepath.Join(abs, de.Name()), arcName+"/"+de.Name())
+				}
+				return nil
+			}
+			fh, err := zip.FileInfoHeader(info)
+			if err != nil {
+				return nil
+			}
+			fh.Name = arcName
+			fh.Method = zip.Deflate
+			w, err := zw.CreateHeader(fh)
+			if err != nil {
+				return err
+			}
+			f, err := os.Open(abs)
+			if err != nil {
+				return nil
+			}
+			defer f.Close()
+			_, err = io.Copy(w, f)
+			return err
+		}
+		for _, e := range entries {
+			addEntry(e.abs, e.arcName)
+		}
+
+	case "tar", "tar.gz":
+		var tw *tar.Writer
+		if req.Format == "tar.gz" {
+			gw := gzip.NewWriter(outFile)
+			defer gw.Close()
+			tw = tar.NewWriter(gw)
+		} else {
+			tw = tar.NewWriter(outFile)
+		}
+		defer tw.Close()
+		var addEntry func(abs, arcName string) error
+		addEntry = func(abs, arcName string) error {
+			info, err := os.Lstat(abs)
+			if err != nil {
+				return nil
+			}
+			hdr, err := tar.FileInfoHeader(info, "")
+			if err != nil {
+				return nil
+			}
+			hdr.Name = arcName
+			if info.IsDir() {
+				hdr.Name += "/"
+				tw.WriteHeader(hdr)
+				des, _ := os.ReadDir(abs)
+				for _, de := range des {
+					addEntry(filepath.Join(abs, de.Name()), arcName+"/"+de.Name())
+				}
+				return nil
+			}
+			if err := tw.WriteHeader(hdr); err != nil {
+				return err
+			}
+			f, err := os.Open(abs)
+			if err != nil {
+				return nil
+			}
+			defer f.Close()
+			_, err = io.Copy(tw, f)
+			return err
+		}
+		for _, e := range entries {
+			addEntry(e.abs, e.arcName)
+		}
+	}
+
 	c.JSON(200, gin.H{"ok": true, "output": req.Output})
 }
 
@@ -1172,35 +1253,127 @@ func (h *Handler) DecompressFile(c *gin.Context) {
 	}
 
 	name := strings.ToLower(filepath.Base(absPath))
-	var cmd *exec.Cmd
+
+	// safeExtract 安全写出文件（防 zip-slip）
+	safeExtract := func(dest, entryName string, r io.Reader, mode os.FileMode, isDir bool) error {
+		// 清理路径，防止 ../ 穿越
+		clean := filepath.Join(dest, filepath.Clean("/"+entryName))
+		if !strings.HasPrefix(clean, filepath.Clean(dest)+string(os.PathSeparator)) {
+			return nil // 跳过非法路径
+		}
+		if isDir {
+			return os.MkdirAll(clean, 0755)
+		}
+		if err := os.MkdirAll(filepath.Dir(clean), 0755); err != nil {
+			return err
+		}
+		f, err := os.OpenFile(clean, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode&0777|0600)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		_, err = io.Copy(f, r)
+		return err
+	}
+
 	switch {
 	case strings.HasSuffix(name, ".tar.gz") || strings.HasSuffix(name, ".tgz"):
-		// tar -xzf file.tar.gz -C destdir
-		cmd = exec.Command("tar", "-xzf", absPath, "-C", absDestDir)
+		f, err := os.Open(absPath)
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		defer f.Close()
+		gr, err := gzip.NewReader(f)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "invalid gzip: " + err.Error()})
+			return
+		}
+		defer gr.Close()
+		tr := tar.NewReader(gr)
+		for {
+			hdr, err := tr.Next()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				c.JSON(500, gin.H{"error": "tar read error: " + err.Error()})
+				return
+			}
+			if err := safeExtract(absDestDir, hdr.Name, tr, os.FileMode(hdr.Mode), hdr.Typeflag == tar.TypeDir); err != nil {
+				c.JSON(500, gin.H{"error": err.Error()})
+				return
+			}
+		}
+
 	case strings.HasSuffix(name, ".tar"):
-		// tar -xf file.tar -C destdir
-		cmd = exec.Command("tar", "-xf", absPath, "-C", absDestDir)
+		f, err := os.Open(absPath)
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		defer f.Close()
+		tr := tar.NewReader(f)
+		for {
+			hdr, err := tr.Next()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				c.JSON(500, gin.H{"error": "tar read error: " + err.Error()})
+				return
+			}
+			if err := safeExtract(absDestDir, hdr.Name, tr, os.FileMode(hdr.Mode), hdr.Typeflag == tar.TypeDir); err != nil {
+				c.JSON(500, gin.H{"error": err.Error()})
+				return
+			}
+		}
+
 	case strings.HasSuffix(name, ".gz"):
-		// gzip -dk file.gz 解压到原目录，再 mv 到目标目录
-		// 直接用 gzip -c -d 输出到目标文件，不占主进程内存
+		// 单文件 .gz
+		f, err := os.Open(absPath)
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		defer f.Close()
+		gr, err := gzip.NewReader(f)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "invalid gzip: " + err.Error()})
+			return
+		}
+		defer gr.Close()
 		outName := strings.TrimSuffix(filepath.Base(absPath), ".gz")
-		outPath := filepath.Join(absDestDir, outName)
-		cmd = exec.Command("sh", "-c", fmt.Sprintf("gzip -c -d %q > %q", absPath, outPath))
+		if err := safeExtract(absDestDir, outName, gr, 0644, false); err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
 	case strings.HasSuffix(name, ".zip"):
-		// unzip -o file.zip -d destdir
-		cmd = exec.Command("unzip", "-o", absPath, "-d", absDestDir)
+		zr, err := zip.OpenReader(absPath)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "invalid zip: " + err.Error()})
+			return
+		}
+		defer zr.Close()
+		for _, zf := range zr.File {
+			rc, err := zf.Open()
+			if err != nil {
+				continue
+			}
+			err = safeExtract(absDestDir, zf.Name, rc, zf.Mode(), zf.FileInfo().IsDir())
+			rc.Close()
+			if err != nil {
+				c.JSON(500, gin.H{"error": err.Error()})
+				return
+			}
+		}
+
 	default:
 		c.JSON(400, gin.H{"error": "unsupported archive format"})
 		return
 	}
 
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	cmd.Stdout = io.Discard
-	if err := cmd.Run(); err != nil {
-		c.JSON(500, gin.H{"error": "decompress failed: " + stderr.String()})
-		return
-	}
 	c.JSON(200, gin.H{"ok": true})
 }
 
@@ -1237,37 +1410,68 @@ func (h *Handler) FetchURL(c *gin.Context) {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	hasWget := func() bool { _, e := exec.LookPath("wget"); return e == nil }()
-	hasCurl := func() bool { _, e := exec.LookPath("curl"); return e == nil }()
-	if !hasWget && !hasCurl {
-		c.JSON(500, gin.H{"error": "neither wget nor curl is available on this system"})
-		return
+
+	// 用 Go 标准库 net/http 下载，流式写入磁盘，无外部命令依赖
+	httpClient := &http.Client{
+		Timeout: 30 * time.Minute, // 大文件给足时间
+		CheckRedirect: func(r *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return fmt.Errorf("too many redirects")
+			}
+			// 每次重定向都重新校验目标 URL（防 DNS 重绑定）
+			return validatePublicURL(r.URL.String())
+		},
 	}
-	var cmd *exec.Cmd
-	outPath := filepath.Join(absDir, req.Filename)
-	if req.Filename != "" {
-		if hasWget {
-			cmd = exec.Command("wget", "-q", "-O", outPath, req.URL)
-		} else {
-			cmd = exec.Command("curl", "-L", "-o", outPath, req.URL)
-		}
-	} else {
-		if hasWget {
-			cmd = exec.Command("wget", "-q", "-P", absDir, req.URL)
-		} else {
-			cmd = exec.Command("curl", "-L", "--output-dir", absDir, "-O", req.URL)
-		}
-	}
-	cmd.Dir = absDir
-	// 用 Run() 而非 CombinedOutput()：后者会把 stdout/stderr 全量读入内存 buffer。
-	// wget/curl 下载文件时 stdout 可能就是文件内容本身（未指定 -O 时），
-	// 用 Run() + 丢弃 stdout/stderr 可避免大文件被意外吸入内存。
-	cmd.Stdout = io.Discard
-	cmd.Stderr = io.Discard
-	if err := cmd.Run(); err != nil {
+
+	resp, err := httpClient.Get(req.URL)
+	if err != nil {
 		c.JSON(500, gin.H{"error": "fetch failed: " + err.Error()})
 		return
 	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		c.JSON(500, gin.H{"error": fmt.Sprintf("remote returned %d", resp.StatusCode)})
+		return
+	}
+
+	// 确定保存文件名
+	filename := req.Filename
+	if filename == "" {
+		// 从 URL 或 Content-Disposition 推断
+		if cd := resp.Header.Get("Content-Disposition"); cd != "" {
+			if _, params, err := mime.ParseMediaType(cd); err == nil {
+				if fn, ok := params["filename"]; ok && fn != "" {
+					filename = filepath.Base(fn)
+				}
+			}
+		}
+		if filename == "" {
+			u, _ := url.Parse(req.URL)
+			filename = filepath.Base(u.Path)
+		}
+		if filename == "" || filename == "." || filename == "/" {
+			filename = "download"
+		}
+	}
+	// 清理文件名，防止路径穿越
+	filename = filepath.Base(filepath.Clean(filename))
+
+	outPath := filepath.Join(absDir, filename)
+	f, err := os.Create(outPath)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "cannot create file: " + err.Error()})
+		return
+	}
+	defer f.Close()
+
+	// 流式写入，io.Copy 只用 32KB buffer，不管文件多大内存都不增长
+	if _, err := io.Copy(f, resp.Body); err != nil {
+		os.Remove(outPath) // 下载失败清理残留
+		c.JSON(500, gin.H{"error": "download interrupted: " + err.Error()})
+		return
+	}
+
 	c.JSON(200, gin.H{"ok": true})
 }
 
@@ -1698,8 +1902,8 @@ func (h *Handler) DetectFileType(c *gin.Context) {
 	}
 	defer f.Close()
 
-	// 读取前 8KB 进行检测
-	buf := make([]byte, 8192)
+	// 读取前 512 字节，http.DetectContentType 只需 512 字节
+	buf := make([]byte, 512)
 	n, _ := f.Read(buf)
 	sample := buf[:n]
 
@@ -1712,20 +1916,238 @@ func (h *Handler) DetectFileType(c *gin.Context) {
 	// 含 NUL 字节 → 二进制
 	for _, b := range sample {
 		if b == 0 {
-			// 尝试用 file 命令获取 mime 供前端展示
-			mime := "application/octet-stream"
-			if out, err2 := exec.Command("file", "--mime-type", "-b", absPath).Output(); err2 == nil {
-				mime = strings.TrimSpace(string(out))
-			}
-			c.JSON(200, gin.H{"text": false, "mime": mime})
+			mimeType := http.DetectContentType(sample)
+			c.JSON(200, gin.H{"text": false, "mime": mimeType})
 			return
 		}
 	}
 
-	// 无 NUL 字节 → 视为文本（涵盖所有无后缀配置文件、脚本等）
-	mime := "text/plain"
-	if out, err2 := exec.Command("file", "--mime-type", "-b", absPath).Output(); err2 == nil {
-		mime = strings.TrimSpace(string(out))
+	// 无 NUL 字节 → 视为文本
+	mimeType := http.DetectContentType(sample)
+	// DetectContentType 对纯文本返回 text/plain; charset=utf-8，保持原样
+	c.JSON(200, gin.H{"text": true, "mime": mimeType})
+}
+
+// ── SSH WebSocket Handler ──────────────────────────────────────────────────────
+
+var sshWSUpgrader = websocket.Upgrader{
+	ReadBufferSize:  4096,
+	WriteBufferSize: 4096,
+	CheckOrigin:     func(r *http.Request) bool { return true },
+}
+
+type sshWSMessage struct {
+	Type string `json:"type"`
+	Data string `json:"data,omitempty"`
+	Rows uint32 `json:"rows,omitempty"`
+	Cols uint32 `json:"cols,omitempty"`
+}
+
+// ── SSH Settings ──────────────────────────────────────────────────────────────
+
+func (h *Handler) GetSSHSettings(c *gin.Context) {
+	var s auth.Settings
+	h.db.First(&s)
+	c.JSON(200, gin.H{
+		"ssh_host":          s.SSHHost,
+		"ssh_port":          s.SSHPort,
+		"ssh_user":          s.SSHUser,
+		"ssh_auth_type":     s.SSHAuthType,
+		"ssh_has_password":  s.SSHPasswordEnc != "",
+		"ssh_has_key":       s.SSHPrivateKeyEnc != "",
+	})
+}
+
+func (h *Handler) UpdateSSHSettings(c *gin.Context) {
+	var s auth.Settings
+	h.db.First(&s)
+	var req struct {
+		Host       string `json:"ssh_host"`
+		Port       int    `json:"ssh_port"`
+		User       string `json:"ssh_user"`
+		AuthType   string `json:"ssh_auth_type"`
+		Password   string `json:"ssh_password"`    // 空字符串=不修改
+		PrivateKey string `json:"ssh_private_key"` // 空字符串=不修改
 	}
-	c.JSON(200, gin.H{"text": true, "mime": mime})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	if req.Host != "" {
+		s.SSHHost = req.Host
+	}
+	if req.Port > 0 {
+		s.SSHPort = req.Port
+	}
+	if req.User != "" {
+		s.SSHUser = req.User
+	}
+	if req.AuthType == "password" || req.AuthType == "key" {
+		s.SSHAuthType = req.AuthType
+	}
+	if req.Password != "" {
+		if err := s.SetSSHPassword(req.Password); err != nil {
+			c.JSON(500, gin.H{"error": "failed to encrypt password"})
+			return
+		}
+	}
+	if req.PrivateKey != "" {
+		if err := s.SetSSHPrivateKey(req.PrivateKey); err != nil {
+			c.JSON(500, gin.H{"error": "failed to encrypt private key"})
+			return
+		}
+	}
+	h.db.Save(&s)
+	c.JSON(200, gin.H{
+		"ssh_host":         s.SSHHost,
+		"ssh_port":         s.SSHPort,
+		"ssh_user":         s.SSHUser,
+		"ssh_auth_type":    s.SSHAuthType,
+		"ssh_has_password": s.SSHPasswordEnc != "",
+		"ssh_has_key":      s.SSHPrivateKeyEnc != "",
+	})
+}
+
+// ── SSH WebSocket ─────────────────────────────────────────────────────────────
+
+var sshWSUpgrader = websocket.Upgrader{
+	ReadBufferSize:  4096,
+	WriteBufferSize: 4096,
+	CheckOrigin:     func(r *http.Request) bool { return true },
+}
+
+type sshWSMessage struct {
+	Type string `json:"type"`
+	Data string `json:"data,omitempty"`
+	Rows uint32 `json:"rows,omitempty"`
+	Cols uint32 `json:"cols,omitempty"`
+}
+
+// SSHWebSocket 根据设置中保存的配置建立 SSH WebSocket 隧道
+func (h *Handler) SSHWebSocket(c *gin.Context) {
+	conn, err := sshWSUpgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+
+	wsMu := &sync.Mutex{}
+	wsSend := func(v interface{}) {
+		wsMu.Lock()
+		defer wsMu.Unlock()
+		conn.WriteJSON(v)
+	}
+
+	// 读取 SSH 配置
+	var s auth.Settings
+	h.db.First(&s)
+
+	host := s.SSHHost
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	port := s.SSHPort
+	if port == 0 {
+		port = 22
+	}
+	user := s.SSHUser
+	if user == "" {
+		wsSend(gin.H{"type": "error", "data": "SSH 用户名未配置，请先在设置中填写"})
+		return
+	}
+
+	cfg := sshpkg.Config{
+		Host:     host,
+		Port:     port,
+		Username: user,
+	}
+
+	authType := s.SSHAuthType
+	if authType == "" {
+		authType = "password"
+	}
+
+	if authType == "key" {
+		keyStr, err := s.GetSSHPrivateKey()
+		if err != nil || keyStr == "" {
+			wsSend(gin.H{"type": "error", "data": "SSH 私钥未配置或解密失败，请先在设置中填写"})
+			return
+		}
+		cfg.PrivateKey = []byte(keyStr)
+	} else {
+		pwd, err := s.GetSSHPassword()
+		if err != nil || pwd == "" {
+			wsSend(gin.H{"type": "error", "data": "SSH 密码未配置或解密失败，请先在设置中填写"})
+			return
+		}
+		cfg.Password = pwd
+	}
+
+	sshSession, err := sshpkg.Connect(cfg)
+	if err != nil {
+		wsSend(gin.H{"type": "error", "data": err.Error()})
+		return
+	}
+	defer sshSession.Close()
+
+	wsSend(gin.H{"type": "connected"})
+
+	outCh := make(chan []byte, 128)
+	errCh := make(chan error, 2)
+	sshSession.ReadLoop(outCh, errCh)
+
+	type rawMsg struct {
+		data []byte
+		err  error
+	}
+	wsMsgCh := make(chan rawMsg, 32)
+	go func() {
+		for {
+			_, raw, err := conn.ReadMessage()
+			wsMsgCh <- rawMsg{data: raw, err: err}
+			if err != nil {
+				return
+			}
+		}
+	}()
+
+	for {
+		select {
+		case data, ok := <-outCh:
+			if !ok {
+				return
+			}
+			wsSend(gin.H{"type": "output", "data": string(data)})
+
+		case sshErr := <-errCh:
+			if sshErr != nil {
+				wsSend(gin.H{"type": "error", "data": sshErr.Error()})
+			} else {
+				wsSend(gin.H{"type": "closed"})
+			}
+			return
+
+		case wsm := <-wsMsgCh:
+			if wsm.err != nil {
+				return
+			}
+			var msg sshWSMessage
+			if err := json.Unmarshal(wsm.data, &msg); err != nil {
+				continue
+			}
+			switch msg.Type {
+			case "input":
+				sshSession.Write([]byte(msg.Data))
+			case "resize":
+				rows, cols := msg.Rows, msg.Cols
+				if rows == 0 {
+					rows = 24
+				}
+				if cols == 0 {
+					cols = 80
+				}
+				sshSession.Resize(rows, cols)
+			}
+		}
+	}
 }

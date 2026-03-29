@@ -129,6 +129,79 @@
           </button>
         </div>
 
+        <!-- SSH -->
+        <div class="settings-card">
+          <h4 class="card-title">{{ lang === 'zh' ? 'SSH 连接' : 'SSH Connection' }}</h4>
+          <p class="card-desc">{{ lang === 'zh' ? '配置 SSH 终端连接信息，密码和私钥加密保存' : 'Configure SSH terminal connection. Credentials are encrypted.' }}</p>
+
+          <div class="ssh-fields">
+            <div class="ssh-row">
+              <div class="field ssh-field-host">
+                <label>{{ lang === 'zh' ? '主机地址' : 'Host' }}</label>
+                <input v-model="sshForm.host" type="text" placeholder="127.0.0.1" />
+              </div>
+              <div class="field ssh-field-port">
+                <label>{{ lang === 'zh' ? '端口' : 'Port' }}</label>
+                <input v-model.number="sshForm.port" type="number" placeholder="22" min="1" max="65535" />
+              </div>
+              <div class="field ssh-field-user">
+                <label>{{ lang === 'zh' ? '用户名' : 'Username' }}</label>
+                <input v-model="sshForm.user" type="text" placeholder="root" autocomplete="off" />
+              </div>
+            </div>
+
+            <div class="field">
+              <label>{{ lang === 'zh' ? '认证方式' : 'Auth Type' }}</label>
+              <div class="ssh-auth-tabs">
+                <button
+                  class="ssh-auth-tab"
+                  :class="{ active: sshForm.authType === 'password' }"
+                  @click="sshForm.authType = 'password'">
+                  {{ lang === 'zh' ? '密码' : 'Password' }}
+                </button>
+                <button
+                  class="ssh-auth-tab"
+                  :class="{ active: sshForm.authType === 'key' }"
+                  @click="sshForm.authType = 'key'">
+                  {{ lang === 'zh' ? '私钥' : 'Private Key' }}
+                </button>
+              </div>
+            </div>
+
+            <div v-if="sshForm.authType === 'password'" class="field">
+              <label>{{ lang === 'zh' ? '密码' : 'Password' }}</label>
+              <input
+                v-model="sshForm.password"
+                type="password"
+                :placeholder="sshHasPassword
+                  ? (lang === 'zh' ? '留空则保持原密码不变' : 'Leave blank to keep current')
+                  : (lang === 'zh' ? '输入 SSH 密码' : 'Enter SSH password')"
+                autocomplete="new-password"
+              />
+              <p v-if="sshHasPassword" class="field-hint">✓ {{ lang === 'zh' ? '已设置密码（加密存储）' : 'Password is set (encrypted)' }}</p>
+            </div>
+
+            <div v-if="sshForm.authType === 'key'" class="field">
+              <label>{{ lang === 'zh' ? '私钥内容' : 'Private Key' }}</label>
+              <textarea
+                v-model="sshForm.privateKey"
+                class="ssh-key-textarea"
+                :placeholder="sshHasKey
+                  ? (lang === 'zh' ? '留空则保持原私钥不变' : 'Leave blank to keep current key')
+                  : (lang === 'zh' ? '粘贴 PEM 格式私钥（-----BEGIN ...）' : 'Paste PEM private key (-----BEGIN ...)')"
+                autocomplete="off"
+                spellcheck="false"
+              ></textarea>
+              <p v-if="sshHasKey" class="field-hint">✓ {{ lang === 'zh' ? '已设置私钥（加密存储）' : 'Private key is set (encrypted)' }}</p>
+            </div>
+          </div>
+
+          <button class="btn-save" @click="saveSSH">
+            <span v-if="!savedSSH">{{ t.save }}</span>
+            <span v-else>✓ {{ t.saved }}</span>
+          </button>
+        </div>
+
         <!-- Theme -->
         <div class="settings-card">
           <h4 class="card-title">{{ lang === 'zh' ? '界面主题' : 'Theme' }}</h4>
@@ -174,6 +247,12 @@ const webdavHasPassword = ref(false)
 const webdavForm = ref({ enabled: false, subPath: '', password: '' })
 const davUrl = computed(() => `${window.location.origin}/dav/`)
 
+// SSH
+const savedSSH = ref(false)
+const sshHasPassword = ref(false)
+const sshHasKey = ref(false)
+const sshForm = ref({ host: '', port: 22, user: '', authType: 'password', password: '', privateKey: '' })
+
 const themes = [
   { id: 'blue',   label: lang.value === 'zh' ? '蓝白（默认）' : 'Blue (Default)', gradient: 'linear-gradient(135deg, #2563EB, #0EA5E9)' },
   { id: 'rose',   label: lang.value === 'zh' ? '玫瑰粉' : 'Rose Pink',   gradient: 'linear-gradient(135deg, #E11D48, #FB7185)' },
@@ -208,6 +287,19 @@ async function load() {
     password: '', // 永不回显密码
   }
   webdavHasPassword.value = wdata.webdav_has_password
+
+  // SSH
+  const { data: sdata } = await api.get('/ssh/settings')
+  sshForm.value = {
+    host: sdata.ssh_host || '127.0.0.1',
+    port: sdata.ssh_port || 22,
+    user: sdata.ssh_user || 'root',
+    authType: sdata.ssh_auth_type || 'password',
+    password: '',
+    privateKey: '',
+  }
+  sshHasPassword.value = sdata.ssh_has_password
+  sshHasKey.value = sdata.ssh_has_key
 }
 
 async function saveWebDAV() {
@@ -257,6 +349,29 @@ async function saveSettings() {
   await api.put('/settings', { storage_dir: settingsForm.value.storageDir, lang: lang.value })
   savedSettings.value = true
   setTimeout(() => savedSettings.value = false, 2000)
+}
+
+async function saveSSH() {
+  const payload = {
+    ssh_host:     sshForm.value.host || '127.0.0.1',
+    ssh_port:     sshForm.value.port || 22,
+    ssh_user:     sshForm.value.user || 'root',
+    ssh_auth_type: sshForm.value.authType,
+  }
+  if (sshForm.value.authType === 'password' && sshForm.value.password) {
+    payload.ssh_password = sshForm.value.password
+  }
+  if (sshForm.value.authType === 'key' && sshForm.value.privateKey) {
+    payload.ssh_private_key = sshForm.value.privateKey
+  }
+  await api.put('/ssh/settings', payload)
+  sshForm.value.password = ''
+  sshForm.value.privateKey = ''
+  savedSSH.value = true
+  const { data: sdata } = await api.get('/ssh/settings')
+  sshHasPassword.value = sdata.ssh_has_password
+  sshHasKey.value = sdata.ssh_has_key
+  setTimeout(() => savedSSH.value = false, 2000)
 }
 
 onMounted(load)
@@ -373,5 +488,20 @@ onMounted(load)
   .settings-card { padding: 16px; }
   .theme-grid { grid-template-columns: repeat(2, 1fr); }
   .webdav-addr-preview { flex-direction: column; align-items: flex-start; gap: 4px; }
+}
+
+/* SSH */
+.ssh-fields { display: flex; flex-direction: column; gap: 16px; margin-bottom: 4px; }
+.ssh-row { display: flex; gap: 12px; }
+.ssh-field-host { flex: 3; }
+.ssh-field-port { flex: 1; min-width: 80px; }
+.ssh-field-user { flex: 2; }
+.ssh-auth-tabs { display: flex; gap: 6px; }
+.ssh-auth-tab { padding: 6px 16px; border: 1.5px solid var(--gray-200); border-radius: var(--radius-sm); background: white; font-size: 13px; font-weight: 500; color: var(--gray-600); cursor: pointer; transition: var(--transition); }
+.ssh-auth-tab.active { border-color: var(--blue-500); color: var(--blue-600); background: var(--blue-50); }
+.ssh-key-textarea { width: 100%; height: 120px; padding: 10px 14px; border: 1.5px solid var(--gray-200); border-radius: var(--radius-sm); font-size: 12px; font-family: 'JetBrains Mono', monospace; color: var(--gray-800); outline: none; resize: vertical; transition: var(--transition); }
+.ssh-key-textarea:focus { border-color: var(--blue-500); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+@media (max-width: 600px) {
+  .ssh-row { flex-direction: column; gap: 12px; }
 }
 </style>

@@ -236,7 +236,11 @@ func main() {
 			authed.POST("/files/upload-folder", h.UploadFolder)
 			authed.GET("/files/dirtree", h.ListDirTree)
 
-			authed.POST("/share", h.CreateShare)
+			authed.GET("/ws/ssh", h.SSHWebSocket)
+		authed.GET("/ssh/settings", h.GetSSHSettings)
+		authed.PUT("/ssh/settings", h.UpdateSSHSettings)
+
+		authed.POST("/share", h.CreateShare)
 			authed.GET("/share", h.ListShares)
 			authed.DELETE("/share/:id", h.DeleteShare)
 

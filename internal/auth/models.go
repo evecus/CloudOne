@@ -92,6 +92,8 @@ type User struct {
 // JWTSecretEnc      — AES-GCM 加密的 JWT 签名密钥（base64）
 // WebDAVPasswordEnc — AES-GCM 加密的 WebDAV 独立密码 bcrypt 哈希（base64）
 // WebDAVUsername    — 非敏感，明文存储
+// SSHPasswordEnc    — AES-GCM 加密的 SSH 密码（base64）
+// SSHPrivateKeyEnc  — AES-GCM 加密的 SSH 私钥（base64）
 type Settings struct {
 	ID               uint   `gorm:"primarykey"`
 	StorageDir       string `json:"storage_dir"`
@@ -105,6 +107,13 @@ type Settings struct {
 	WebDAVPasswordEnc string `json:"-"` // AES-GCM(bcrypt(password))，不暴露
 	JWTSecretEnc     string `json:"-"` // AES-GCM(jwt_secret)，不暴露
 	ShowHidden       bool   `json:"show_hidden"`
+	// SSH 连接配置（非敏感字段明文，敏感字段加密）
+	SSHHost         string `json:"ssh_host"`
+	SSHPort         int    `json:"ssh_port"`
+	SSHUser         string `json:"ssh_user"`
+	SSHAuthType     string `json:"ssh_auth_type"` // "password" | "key"
+	SSHPasswordEnc  string `json:"-"`             // AES-GCM(password)
+	SSHPrivateKeyEnc string `json:"-"`             // AES-GCM(private_key)
 }
 
 // GetJWTSecret 解密并返回 JWT 密钥明文
@@ -144,6 +153,50 @@ func (s *Settings) SetWebDAVPasswordHash(bcryptHash string) error {
 		return err
 	}
 	s.WebDAVPasswordEnc = enc
+	return nil
+}
+
+// GetSSHPassword 解密并返回 SSH 密码明文
+func (s *Settings) GetSSHPassword() (string, error) {
+	if s.SSHPasswordEnc == "" {
+		return "", nil
+	}
+	return Decrypt(s.SSHPasswordEnc)
+}
+
+// SetSSHPassword 加密并存储 SSH 密码
+func (s *Settings) SetSSHPassword(password string) error {
+	if password == "" {
+		s.SSHPasswordEnc = ""
+		return nil
+	}
+	enc, err := Encrypt(password)
+	if err != nil {
+		return err
+	}
+	s.SSHPasswordEnc = enc
+	return nil
+}
+
+// GetSSHPrivateKey 解密并返回 SSH 私钥明文
+func (s *Settings) GetSSHPrivateKey() (string, error) {
+	if s.SSHPrivateKeyEnc == "" {
+		return "", nil
+	}
+	return Decrypt(s.SSHPrivateKeyEnc)
+}
+
+// SetSSHPrivateKey 加密并存储 SSH 私钥
+func (s *Settings) SetSSHPrivateKey(key string) error {
+	if key == "" {
+		s.SSHPrivateKeyEnc = ""
+		return nil
+	}
+	enc, err := Encrypt(key)
+	if err != nil {
+		return err
+	}
+	s.SSHPrivateKeyEnc = enc
 	return nil
 }
 

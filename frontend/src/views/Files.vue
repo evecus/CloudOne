@@ -28,24 +28,49 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             {{ t.search }}
           </button>
-          <button class="btn-action" @click="showFolderUpload = true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><polyline points="12 11 12 17"/><polyline points="9 14 12 11 15 14"/></svg>
-            {{ t.uploadFolder }}
-          </button>
+          <!-- 上传下拉 -->
+          <div class="btn-dropdown-wrap" ref="uploadDropRef">
+            <button class="btn-action btn-dropdown-trigger" @click="showUploadDrop=!showUploadDrop">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              {{ lang==='zh' ? '上传' : 'Upload' }}
+              <svg class="dropdown-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div v-if="showUploadDrop" class="btn-dropdown-menu">
+              <div class="btn-dropdown-item" @click="showUpload=true;stagedFiles=[];uploadDone=false;uploadProgress=[];showUploadDrop=false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                {{ lang==='zh' ? '上传文件' : 'Upload File' }}
+              </div>
+              <div class="btn-dropdown-item" @click="showFolderUpload=true;showUploadDrop=false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                {{ lang==='zh' ? '上传文件夹' : 'Upload Folder' }}
+              </div>
+            </div>
+          </div>
           <input ref="folderInput" type="file" webkitdirectory multiple @change="confirmFolderUpload" style="display:none" />
-          <button class="btn-action" @click="showUpload = true; stagedFiles=[]; uploadDone=false; uploadProgress=[]">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            {{ t.upload }}
-          </button>
-          <button class="btn-action" @click="showMkdir = true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
-            {{ t.newFolder }}
-          </button>
-          <button class="btn-action" @click="showCreate = true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-            {{ t.newFile }}
-          </button>
+          <!-- 新建下拉 -->
+          <div class="btn-dropdown-wrap" ref="createDropRef">
+            <button class="btn-action btn-dropdown-trigger" @click="showCreateDrop=!showCreateDrop">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              {{ lang==='zh' ? '新建' : 'New' }}
+              <svg class="dropdown-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div v-if="showCreateDrop" class="btn-dropdown-menu">
+              <div class="btn-dropdown-item" @click="showMkdir=true;showCreateDrop=false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+                {{ lang==='zh' ? '新建文件夹' : 'New Folder' }}
+              </div>
+              <div class="btn-dropdown-item" @click="showCreate=true;showCreateDrop=false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                {{ lang==='zh' ? '新建文件' : 'New File' }}
+              </div>
+            </div>
+          </div>
           <div class="header-divider"></div>
+          <!-- SSH 按钮 -->
+          <button class="btn-action btn-ssh" @click="openSSH">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="8 21 12 17 16 21"/><line x1="12" y1="17" x2="12" y2="21"/><polyline points="6 8 10 12 6 16"/><line x1="13" y1="16" x2="17" y2="16"/></svg>
+            SSH
+          </button>
           <button class="btn-settings" @click="showSettings = true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
           </button>
@@ -348,6 +373,42 @@
       </div>
 
       <!-- ===== 所有弹窗 ===== -->
+
+      <!-- SSH 全屏终端 -->
+      <teleport to="body">
+        <div v-if="showSSH" class="ssh-overlay">
+          <div class="ssh-modal">
+            <div class="ssh-header">
+              <div class="ssh-header-left">
+                <div class="ssh-dot ssh-dot-red"></div>
+                <div class="ssh-dot ssh-dot-yellow"></div>
+                <div class="ssh-dot ssh-dot-green"></div>
+                <span class="ssh-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="6 8 10 12 6 16"/><line x1="13" y1="16" x2="17" y2="16"/></svg>
+                  SSH — {{ sshInfo.user || 'user' }}@{{ sshInfo.host || '127.0.0.1' }}:{{ sshInfo.port || 22 }}
+                </span>
+              </div>
+              <button class="ssh-close" @click="closeSSH">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <div class="ssh-status-bar" v-if="sshStatus !== 'connected'">
+              <span :class="'ssh-status ssh-status-' + sshStatus">
+                <span v-if="sshStatus==='connecting'">{{ lang==='zh'?'正在连接…':'Connecting…' }}</span>
+                <span v-else-if="sshStatus==='error'">{{ sshError }}</span>
+                <span v-else-if="sshStatus==='closed'">{{ lang==='zh'?'连接已断开':'Disconnected' }}</span>
+              </span>
+              <button v-if="sshStatus==='error'||sshStatus==='closed'" class="ssh-reconnect" @click="openSSH">
+                {{ lang==='zh'?'重新连接':'Reconnect' }}
+              </button>
+              <router-link v-if="sshStatus==='error'" to="/settings" class="ssh-reconnect ssh-to-settings" @click="closeSSH">
+                {{ lang==='zh'?'去设置':'Settings' }}
+              </router-link>
+            </div>
+            <div ref="sshTermEl" class="ssh-term"></div>
+          </div>
+        </div>
+      </teleport>
 
       <!-- 上传文件：选好后手动确认 -->
       <div v-if="showUpload" class="modal-bg modal-bg-centered" @click.self="showUpload=false;stagedFiles=[];uploadDone=false;uploadProgress=[]">
@@ -934,6 +995,22 @@ const renameValue = ref('')
 const renameInputRef = ref(null)
 const showSearch = ref(false)
 const showSearchResult = ref(false)
+
+// 下拉菜单
+const showUploadDrop = ref(false)
+const showCreateDrop = ref(false)
+const uploadDropRef = ref(null)
+const createDropRef = ref(null)
+
+// SSH
+const showSSH = ref(false)
+const sshStatus = ref('connecting') // connecting | connected | error | closed
+const sshError = ref('')
+const sshInfo = ref({ host: '127.0.0.1', port: 22, user: '' })
+const sshTermEl = ref(null)
+let sshWS = null
+let sshTerm = null
+let sshFitAddon = null
 // 上传冲突确认
 const showUploadConflict = ref(false)
 const uploadConflictNames = ref([])
@@ -1745,11 +1822,176 @@ onMounted(() => {
   load(); loadWebDAVStatus()
   document.addEventListener('keydown', onKeydown)
   window.addEventListener('show-hidden-changed', onShowHiddenChanged)
+  document.addEventListener('click', onDocClick)
 })
 onUnmounted(() => {
   document.removeEventListener('keydown', onKeydown)
   window.removeEventListener('show-hidden-changed', onShowHiddenChanged)
+  document.removeEventListener('click', onDocClick)
+  closeSSH()
 })
+
+// 点击页面其他区域关闭下拉
+function onDocClick(e) {
+  if (uploadDropRef.value && !uploadDropRef.value.contains(e.target)) showUploadDrop.value = false
+  if (createDropRef.value && !createDropRef.value.contains(e.target)) showCreateDrop.value = false
+}
+
+// ── SSH ──────────────────────────────────────────────────────────────────────
+
+async function openSSH() {
+  // 先读取 SSH 配置，检查是否已配置
+  try {
+    const res = await api.get('/ssh/settings')
+    const d = res.data
+    // 必须有用户名，且有密码或私钥
+    const hasAuth = (d.ssh_auth_type === 'key' && d.ssh_has_key) ||
+                    (d.ssh_auth_type !== 'key' && d.ssh_has_password)
+    if (!d.ssh_user || !hasAuth) {
+      // 未配置 → 提示去设置
+      sshInfo.value = { host: d.ssh_host || '127.0.0.1', port: d.ssh_port || 22, user: d.ssh_user || '' }
+      showSSH.value = true
+      sshStatus.value = 'error'
+      sshError.value = lang.value === 'zh'
+        ? 'SSH 未配置，请先在「设置 → SSH 连接」中填写连接信息'
+        : 'SSH not configured. Please fill in Settings → SSH Connection first.'
+      return
+    }
+    sshInfo.value = { host: d.ssh_host || '127.0.0.1', port: d.ssh_port || 22, user: d.ssh_user }
+  } catch(e) {
+    sshInfo.value = { host: '127.0.0.1', port: 22, user: '' }
+  }
+
+  showSSH.value = true
+  sshStatus.value = 'connecting'
+  sshError.value = ''
+
+  // 等 DOM 渲染
+  await nextTick()
+
+  // 销毁旧实例
+  if (sshTerm) { sshTerm.dispose(); sshTerm = null }
+  if (sshWS)   { sshWS.close();   sshWS = null }
+
+  // 动态加载 xterm（CDN），避免污染主包
+  await loadXterm()
+
+  // 初始化终端
+  sshTerm = new window.Terminal({
+    fontFamily: "'JetBrains Mono', 'Cascadia Code', monospace",
+    fontSize: 14,
+    lineHeight: 1.4,
+    theme: {
+      background: '#0f1117',
+      foreground: '#e2e8f0',
+      cursor: '#60a5fa',
+      selectionBackground: '#3b82f680',
+      black: '#1e293b', red: '#f87171', green: '#4ade80', yellow: '#fbbf24',
+      blue: '#60a5fa', magenta: '#c084fc', cyan: '#34d399', white: '#e2e8f0',
+      brightBlack: '#475569', brightRed: '#fca5a5', brightGreen: '#86efac',
+      brightYellow: '#fde68a', brightBlue: '#93c5fd', brightMagenta: '#d8b4fe',
+      brightCyan: '#6ee7b7', brightWhite: '#f8fafc',
+    },
+    cursorBlink: true,
+    allowTransparency: false,
+    scrollback: 5000,
+  })
+
+  sshFitAddon = new window.FitAddon.FitAddon()
+  sshTerm.loadAddon(sshFitAddon)
+  sshTerm.open(sshTermEl.value)
+  sshFitAddon.fit()
+
+  // 建立 WebSocket
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+  const token = localStorage.getItem('token')
+  sshWS = new WebSocket(`${proto}://${location.host}/api/ws/ssh?token=${encodeURIComponent(token)}`)
+
+  sshWS.onmessage = (e) => {
+    const msg = JSON.parse(e.data)
+    if (msg.type === 'connected') {
+      sshStatus.value = 'connected'
+      sshFitAddon.fit()
+      sendSSHResize()
+    } else if (msg.type === 'output') {
+      sshTerm.write(msg.data)
+    } else if (msg.type === 'error') {
+      sshStatus.value = 'error'
+      sshError.value = msg.data
+    } else if (msg.type === 'closed') {
+      sshStatus.value = 'closed'
+    }
+  }
+  sshWS.onerror = () => {
+    sshStatus.value = 'error'
+    sshError.value = lang.value === 'zh' ? 'WebSocket 连接失败' : 'WebSocket connection failed'
+  }
+  sshWS.onclose = () => {
+    if (sshStatus.value === 'connected') sshStatus.value = 'closed'
+  }
+
+  // 终端输入 → WebSocket
+  sshTerm.onData(data => {
+    if (sshWS && sshWS.readyState === WebSocket.OPEN) {
+      sshWS.send(JSON.stringify({ type: 'input', data }))
+    }
+  })
+
+  // 窗口 resize 时自动调整终端大小
+  const resizeObs = new ResizeObserver(() => {
+    if (sshFitAddon && sshStatus.value === 'connected') {
+      sshFitAddon.fit()
+      sendSSHResize()
+    }
+  })
+  resizeObs.observe(sshTermEl.value)
+  // 保存以便清理
+  sshTermEl.value._resizeObs = resizeObs
+}
+
+function sendSSHResize() {
+  if (!sshTerm || !sshWS || sshWS.readyState !== WebSocket.OPEN) return
+  sshWS.send(JSON.stringify({ type: 'resize', rows: sshTerm.rows, cols: sshTerm.cols }))
+}
+
+function closeSSH() {
+  if (sshTermEl.value?._resizeObs) {
+    sshTermEl.value._resizeObs.disconnect()
+  }
+  if (sshTerm) { sshTerm.dispose(); sshTerm = null }
+  if (sshWS)   { sshWS.close();    sshWS = null }
+  showSSH.value = false
+  sshStatus.value = 'connecting'
+}
+
+// 动态加载 xterm.js（仅首次）
+function loadXterm() {
+  if (window.Terminal && window.FitAddon) return Promise.resolve()
+  return new Promise((resolve, reject) => {
+    if (document.getElementById('xterm-css')) {
+      loadScript('https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js')
+        .then(() => loadScript('https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js'))
+        .then(resolve).catch(reject)
+      return
+    }
+    const link = document.createElement('link')
+    link.id = 'xterm-css'
+    link.rel = 'stylesheet'
+    link.href = 'https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css'
+    document.head.appendChild(link)
+    loadScript('https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js')
+      .then(() => loadScript('https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js'))
+      .then(resolve).catch(reject)
+  })
+}
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return }
+    const s = document.createElement('script')
+    s.src = src; s.onload = resolve; s.onerror = reject
+    document.head.appendChild(s)
+  })
+}
 
 // 监听浏览器前进/后退：URL 变化时同步 currentPath 并重新加载
 watch(() => _route.params.pathMatch, (val) => {
@@ -1780,6 +2022,50 @@ watch(() => _route.params.pathMatch, (val) => {
 .btn-action:hover { border-color:var(--blue-400); color:var(--blue-600); background:var(--blue-50); }
 .btn-fetch { }
 .btn-fetch:hover { }
+
+/* ── 下拉按钮 ── */
+.btn-dropdown-wrap { position:relative; }
+.btn-dropdown-trigger { display:flex; align-items:center; gap:5px; padding:7px 10px 7px 12px; border:1.5px solid var(--gray-200); border-radius:var(--radius-sm); background:white; font-size:13px; font-weight:500; font-family:inherit; color:var(--gray-600); cursor:pointer; transition:var(--transition); }
+.btn-dropdown-trigger:hover { border-color:var(--blue-400); color:var(--blue-600); background:var(--blue-50); }
+.btn-dropdown-trigger svg:first-child { width:15px; height:15px; }
+.dropdown-caret { width:13px !important; height:13px !important; color:var(--gray-400); transition:transform .15s; }
+.btn-dropdown-menu { position:absolute; top:calc(100% + 5px); left:0; min-width:150px; background:white; border:1.5px solid var(--gray-200); border-radius:var(--radius-sm); box-shadow:0 4px 16px rgba(15,23,42,.10); z-index:200; overflow:hidden; }
+.btn-dropdown-item { display:flex; align-items:center; gap:8px; padding:9px 14px; font-size:13px; font-weight:500; color:var(--gray-700); cursor:pointer; transition:background .12s; }
+.btn-dropdown-item svg { width:15px; height:15px; flex-shrink:0; }
+.btn-dropdown-item:hover { background:var(--blue-50); color:var(--blue-600); }
+
+/* ── SSH 按钮 ── */
+.btn-ssh { color:var(--gray-600); }
+.btn-ssh:hover { border-color:#8b5cf6; color:#7c3aed; background:#f5f3ff; }
+
+/* ── SSH 全屏弹窗 ── */
+.ssh-overlay { position:fixed; inset:0; z-index:2000; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; padding:20px; }
+.ssh-modal { display:flex; flex-direction:column; width:100%; max-width:1100px; height:90vh; max-height:800px; background:#0f1117; border-radius:12px; overflow:hidden; box-shadow:0 24px 80px rgba(0,0,0,.7); border:1px solid #1e293b; }
+.ssh-header { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; background:#1a1f2e; border-bottom:1px solid #1e293b; flex-shrink:0; }
+.ssh-header-left { display:flex; align-items:center; gap:10px; }
+.ssh-dot { width:12px; height:12px; border-radius:50%; flex-shrink:0; }
+.ssh-dot-red { background:#ef4444; }
+.ssh-dot-yellow { background:#f59e0b; }
+.ssh-dot-green { background:#22c55e; }
+.ssh-title { display:flex; align-items:center; gap:7px; font-family:'JetBrains Mono',monospace; font-size:13px; color:#94a3b8; }
+.ssh-title svg { width:14px; height:14px; }
+.ssh-close { width:28px; height:28px; border:none; background:none; cursor:pointer; color:#475569; display:flex; align-items:center; justify-content:center; border-radius:6px; transition:background .15s,color .15s; }
+.ssh-close:hover { background:#ef444420; color:#ef4444; }
+.ssh-close svg { width:16px; height:16px; }
+.ssh-status-bar { padding:8px 16px; background:#111827; border-bottom:1px solid #1e293b; flex-shrink:0; display:flex; align-items:center; gap:12px; }
+.ssh-status { font-family:'JetBrains Mono',monospace; font-size:12px; }
+.ssh-status-connecting { color:#60a5fa; }
+.ssh-status-error { color:#f87171; }
+.ssh-status-closed { color:#94a3b8; }
+.ssh-reconnect { padding:4px 12px; border-radius:6px; border:1px solid #3b82f6; background:none; color:#60a5fa; font-size:12px; cursor:pointer; transition:background .15s; text-decoration:none; display:inline-flex; align-items:center; }
+.ssh-reconnect:hover { background:#3b82f620; }
+.ssh-term { flex:1; overflow:hidden; padding:4px; min-height:0; }
+
+/* 移动端 SSH 弹窗全屏铺满 */
+@media (max-width: 768px) {
+  .ssh-overlay { padding:0; }
+  .ssh-modal { max-width:100%; height:100dvh; max-height:100dvh; border-radius:0; border:none; }
+}
 .btn-search { }
 .btn-search:hover { }
 .btn-settings { width:34px; height:34px; border:1.5px solid var(--gray-200); border-radius:var(--radius-sm); background:white; display:flex; align-items:center; justify-content:center; color:var(--gray-500); cursor:pointer; transition:var(--transition); }
