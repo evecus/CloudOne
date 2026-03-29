@@ -22,14 +22,13 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
           {{ saveError }}
         </span>
-        <button v-if="mode === 'text' || forceText" class="btn-copy-all" @click="copyAll" :title="lang==='zh'?'复制全部内容':'Copy all'">
+        <button v-if="mode === 'text' || forceText" class="btn-select-mode" :class="{ active: selectMode }" @click="toggleSelectMode" :title="lang==='zh'?'选择模式':'Select mode'">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+            <path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2v-4M9 21H5a2 2 0 01-2-2v-4m0 0h18"/>
           </svg>
-          <span class="btn-copy-label">{{ copyDone ? (lang==='zh'?'已复制':'Copied!') : (lang==='zh'?'复制全部':'Copy All') }}</span>
+          <span class="btn-select-label">{{ selectMode ? (lang==='zh'?'退出选择':'Exit Select') : (lang==='zh'?'选择文本':'Select') }}</span>
         </button>
-        <button v-if="mode === 'text' || forceText" class="btn-save" @click="doSave" :disabled="saving">
+        <button v-if="mode === 'text' || forceText" class="btn-save" @click="doSave" :disabled="saving || selectMode">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
             <polyline points="17 21 17 13 7 13 7 21"/>
@@ -65,7 +64,7 @@
       <!-- 文本编辑器 -->
       <div v-else-if="mode === 'text' || forceText" class="editor-cm-wrap">
         <p v-if="contentError" class="edit-error">{{ contentError }}</p>
-        <CodeEditor v-else v-model="content" :filename="filename" />
+        <CodeEditor v-else v-model="content" :filename="filename" :readonly="selectMode" />
       </div>
     </div>
   </div>
@@ -124,29 +123,8 @@ const previewUrl   = ref('')
 const saving    = ref(false)
 const saved     = ref(false)
 const saveError = ref('')
-const copyDone  = ref(false)
-let copyTimer   = null
-
-async function copyAll() {
-  try {
-    await navigator.clipboard.writeText(content.value)
-    copyDone.value = true
-    clearTimeout(copyTimer)
-    copyTimer = setTimeout(() => { copyDone.value = false }, 2000)
-  } catch {
-    // clipboard API 不可用时 fallback
-    const ta = document.createElement('textarea')
-    ta.value = content.value
-    ta.style.cssText = 'position:fixed;opacity:0'
-    document.body.appendChild(ta)
-    ta.select()
-    document.execCommand('copy')
-    document.body.removeChild(ta)
-    copyDone.value = true
-    clearTimeout(copyTimer)
-    copyTimer = setTimeout(() => { copyDone.value = false }, 2000)
-  }
-}
+const selectMode = ref(false)
+function toggleSelectMode() { selectMode.value = !selectMode.value }
 
 let savedTimer = null
 
@@ -262,7 +240,6 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
   if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
   clearTimeout(savedTimer)
-  clearTimeout(copyTimer)
 })
 </script>
 
@@ -348,7 +325,7 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
 }
 
-.btn-copy-all {
+.btn-select-mode {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -362,8 +339,9 @@ onBeforeUnmount(() => {
   cursor: pointer;
   transition: background .15s, border-color .15s, color .15s;
 }
-.btn-copy-all:hover { background: var(--gray-50); border-color: var(--blue-300, #93C5FD); color: var(--blue-600, #2563EB); }
-.btn-copy-all svg { width: 15px; height: 15px; flex-shrink: 0; }
+.btn-select-mode:hover { background: var(--gray-50); border-color: var(--blue-300, #93C5FD); color: var(--blue-600, #2563EB); }
+.btn-select-mode.active { background: var(--blue-50, #EFF6FF); border-color: var(--blue-400, #60A5FA); color: var(--blue-600, #2563EB); }
+.btn-select-mode svg { width: 15px; height: 15px; flex-shrink: 0; }
 .btn-save {
   display: flex;
   align-items: center;
@@ -496,8 +474,8 @@ onBeforeUnmount(() => {
   .editor-filepath { display: none; }
   .btn-save { padding: 7px 12px; font-size: 13px; }
   .btn-save svg { display: none; }
-  .btn-copy-all { padding: 7px 10px; }
-  .btn-copy-label { display: none; }
+  .btn-select-mode { padding: 7px 10px; }
+  .btn-select-label { display: none; }
   .editor-body { padding: 10px; }
 }
 </style>
