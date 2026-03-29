@@ -99,31 +99,6 @@ func (l *rateLimiter) cleanup() {
 // 只有当请求来自受信任的私有网络时，才相信 X-Forwarded-For / X-Real-IP。
 // 直连公网的请求直接使用 RemoteAddr，完全不信任任何转发头。
 
-var privateRanges = func() []*net.IPNet {
-	var nets []*net.IPNet
-	for _, cidr := range []string{
-		"10.0.0.0/8",
-		"172.16.0.0/12",
-		"192.168.0.0/16",
-		"127.0.0.0/8",
-		"::1/128",
-		"fc00::/7",
-	} {
-		_, n, _ := net.ParseCIDR(cidr)
-		nets = append(nets, n)
-	}
-	return nets
-}()
-
-func isPrivateIP(ip net.IP) bool {
-	for _, r := range privateRanges {
-		if r.Contains(ip) {
-			return true
-		}
-	}
-	return false
-}
-
 // RealIP 返回请求的真实客户端 IP。
 // 仅当直连 IP 属于私有网段（即经过可信反代）时才读取转发头。
 func RealIP(r *http.Request) string {
