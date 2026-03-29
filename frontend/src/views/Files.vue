@@ -253,6 +253,10 @@
               :data-name="file.name"
               :class="{ selected: selected.includes(file.path), 'select-mode': selectMode, 'highlight-row': highlightName === file.name }"
               @click="handleRowClick($event, file)"
+              @contextmenu.prevent="handleRowContextMenu($event, file)"
+              @touchstart.passive="handleTouchStart($event, file)"
+              @touchend.passive="handleTouchEnd"
+              @touchmove.passive="handleTouchCancel"
             >
               <div v-if="selectMode" class="col-check" @click.stop="toggleSelect(file)">
                 <div class="checkmark" :class="{ checked: selected.includes(file.path) }">
@@ -1096,23 +1100,10 @@ function handleRowClick(e, file) {
   if (selectMode.value) { toggleSelect(file); return }
   if (file.is_dir) navigate(file.path)
   else {
-    // 文件点击：弹出操作菜单，位置跟随鼠标（桌面）或触点（移动端）
-    const menuW = 210
-    let x = e.clientX ?? e.touches?.[0]?.clientX ?? window.innerWidth / 2
-    let y = e.clientY ?? e.touches?.[0]?.clientY ?? window.innerHeight / 2
-    if (x + menuW > window.innerWidth) x = window.innerWidth - menuW - 8
-    if (y < 8) y = 8
-    ctxMenu.value = { show: true, x, y, file }
-    nextTick(() => {
-      const el = document.querySelector('.ctx-menu')
-      if (!el) return
-      const menuH = el.offsetHeight
-      if (y + menuH > window.innerHeight - 8) {
-        y = window.innerHeight - menuH - 8
-        if (y < 8) y = 8
-        ctxMenu.value = { ...ctxMenu.value, y }
-      }
-    })
+    // 文件左键点击：弹出操作菜单，位置跟随鼠标（桌面）或触点（移动端）
+    const x = e.clientX ?? e.touches?.[0]?.clientX ?? window.innerWidth / 2
+    const y = e.clientY ?? e.touches?.[0]?.clientY ?? window.innerHeight / 2
+    openCtxMenuAt(x, y, file)
   }
 }
 function exitSelectAndClose(which) {
@@ -1123,7 +1114,53 @@ function exitSelectAndClose(which) {
 // ── 右键菜单（已由左键点击接管，此函数保留兼容） ──
 function closeCtxMenu() { ctxMenu.value = { show:false, x:0, y:0, file:null } }
 
-// 移动端长按已移除，轻点通过 @click 触发 handleRowClick
+// 右键点击文件夹时弹出操作菜单（文件不响应右键）
+function handleRowContextMenu(e, file) {
+  if (!file.is_dir) return  // 文件右键不处理
+  if (selectMode.value) return
+  openCtxMenuAt(e.clientX, e.clientY, file)
+}
+
+// 通用：在指定坐标打开操作菜单
+function openCtxMenuAt(clientX, clientY, file) {
+  const menuW = 210
+  let x = clientX ?? window.innerWidth / 2
+  let y = clientY ?? window.innerHeight / 2
+  if (x + menuW > window.innerWidth) x = window.innerWidth - menuW - 8
+  if (y < 8) y = 8
+  ctxMenu.value = { show: true, x, y, file }
+  nextTick(() => {
+    const el = document.querySelector('.ctx-menu')
+    if (!el) return
+    const menuH = el.offsetHeight
+    if (y + menuH > window.innerHeight - 8) {
+      y = window.innerHeight - menuH - 8
+      if (y < 8) y = 8
+      ctxMenu.value = { ...ctxMenu.value, y }
+    }
+  })
+}
+
+// 移动端长按：文件夹长按弹出操作菜单（固定位置，居中底部）
+let longPressTimer = null
+function handleTouchStart(e, file) {
+  if (!file.is_dir) return
+  if (selectMode.value) return
+  longPressTimer = setTimeout(() => {
+    longPressTimer = null
+    // 移动端固定位置：屏幕水平居中，距底部 80px
+    const menuW = 210
+    const x = (window.innerWidth - menuW) / 2
+    const y = window.innerHeight - 320
+    openCtxMenuAt(x, y < 8 ? 8 : y, file)
+  }, 500)
+}
+function handleTouchEnd() {
+  if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null }
+}
+function handleTouchCancel() {
+  if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null }
+}
 
 async function ctxAction(action) {
   const file = ctxMenu.value.file
