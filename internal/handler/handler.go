@@ -1928,21 +1928,6 @@ func (h *Handler) DetectFileType(c *gin.Context) {
 	c.JSON(200, gin.H{"text": true, "mime": mimeType})
 }
 
-// ── SSH WebSocket Handler ──────────────────────────────────────────────────────
-
-var sshWSUpgrader = websocket.Upgrader{
-	ReadBufferSize:  4096,
-	WriteBufferSize: 4096,
-	CheckOrigin:     func(r *http.Request) bool { return true },
-}
-
-type sshWSMessage struct {
-	Type string `json:"type"`
-	Data string `json:"data,omitempty"`
-	Rows uint32 `json:"rows,omitempty"`
-	Cols uint32 `json:"cols,omitempty"`
-}
-
 // ── SSH Settings ──────────────────────────────────────────────────────────────
 
 func (h *Handler) GetSSHSettings(c *gin.Context) {
