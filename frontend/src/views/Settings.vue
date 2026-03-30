@@ -288,18 +288,23 @@ async function load() {
   }
   webdavHasPassword.value = wdata.webdav_has_password
 
-  // SSH
-  const { data: sdata } = await api.get('/ssh/settings')
-  sshForm.value = {
-    host: sdata.ssh_host || '127.0.0.1',
-    port: sdata.ssh_port || 22,
-    user: sdata.ssh_user || 'root',
-    authType: sdata.ssh_auth_type || 'password',
-    password: '',
-    privateKey: '',
+  // SSH（单独 try/catch，失败不影响其他设置项）
+  try {
+    const { data: sdata } = await api.get('/ssh/settings')
+    sshForm.value = {
+      host: sdata.ssh_host || '127.0.0.1',
+      port: sdata.ssh_port || 22,
+      user: sdata.ssh_user || 'root',
+      authType: sdata.ssh_auth_type || 'password',
+      password: '',
+      privateKey: '',
+    }
+    sshHasPassword.value = sdata.ssh_has_password
+    sshHasKey.value = sdata.ssh_has_key
+  } catch(e) {
+    // 接口不存在或报错时使用默认值，SSH 卡片仍正常显示
+    sshForm.value = { host: '127.0.0.1', port: 22, user: 'root', authType: 'password', password: '', privateKey: '' }
   }
-  sshHasPassword.value = sdata.ssh_has_password
-  sshHasKey.value = sdata.ssh_has_key
 }
 
 async function saveWebDAV() {
