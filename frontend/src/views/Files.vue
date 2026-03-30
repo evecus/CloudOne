@@ -406,6 +406,17 @@
               </router-link>
             </div>
             <div ref="sshTermEl" class="ssh-term"></div>
+            <!-- 移动端虚拟按键栏 -->
+            <div class="ssh-vkbd">
+              <button class="ssh-vkey ssh-vkey-ctrl" @click="sshSendCtrlC">Ctrl+C</button>
+              <button class="ssh-vkey" @click="sshSendKey('\x1b')">ESC</button>
+              <div class="ssh-vkbd-divider"></div>
+              <button class="ssh-vkey ssh-vkey-sym" @click="sshSendKey('|')">|</button>
+              <button class="ssh-vkey ssh-vkey-sym" @click="sshSendKey('~')">~</button>
+              <button class="ssh-vkey ssh-vkey-sym" @click="sshSendKey('/')">/ </button>
+              <button class="ssh-vkey ssh-vkey-sym" @click="sshSendKey('\\')">\ </button>
+              <button class="ssh-vkey ssh-vkey-sym" @click="sshSendKey('\`')">`</button>
+            </div>
           </div>
         </div>
       </teleport>
@@ -1954,6 +1965,16 @@ function sendSSHResize() {
   sshWS.send(JSON.stringify({ type: 'resize', rows: sshTerm.rows, cols: sshTerm.cols }))
 }
 
+function sshSendKey(key) {
+  if (!sshWS || sshWS.readyState !== WebSocket.OPEN) return
+  sshWS.send(JSON.stringify({ type: 'input', data: key }))
+  sshTermEl.value?.querySelector('.xterm-helper-textarea')?.focus()
+}
+
+function sshSendCtrlC() {
+  sshSendKey('\x03') // ETX = Ctrl+C
+}
+
 function closeSSH() {
   if (sshTermEl.value?._resizeObs) {
     sshTermEl.value._resizeObs.disconnect()
@@ -2065,6 +2086,42 @@ watch(() => _route.params.pathMatch, (val) => {
 @media (max-width: 768px) {
   .ssh-overlay { padding:0; }
   .ssh-modal { max-width:100%; height:100dvh; max-height:100dvh; border-radius:0; border:none; }
+}
+
+/* 虚拟按键栏：只在移动端显示 */
+.ssh-vkbd { display:none; }
+@media (max-width: 768px) {
+  .ssh-vkbd {
+    display:flex;
+    align-items:center;
+    gap:4px;
+    padding:6px 8px;
+    background:#111827;
+    border-top:1px solid #1e293b;
+    flex-shrink:0;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+  .ssh-vkbd-divider { width:1px; height:20px; background:#1e293b; flex-shrink:0; margin:0 2px; }
+  .ssh-vkey {
+    flex-shrink:0;
+    padding:6px 12px;
+    border-radius:6px;
+    border:1px solid #2d3748;
+    background:#1a2035;
+    color:#94a3b8;
+    font-family:'JetBrains Mono', monospace;
+    font-size:13px;
+    font-weight:500;
+    cursor:pointer;
+    transition:background .1s, color .1s;
+    -webkit-tap-highlight-color:transparent;
+    user-select:none;
+  }
+  .ssh-vkey:active { background:#2d3748; color:#e2e8f0; }
+  .ssh-vkey-ctrl { color:#f87171; border-color:#7f1d1d; }
+  .ssh-vkey-ctrl:active { background:#7f1d1d; color:#fca5a5; }
+  .ssh-vkey-sym { color:#60a5fa; min-width:36px; text-align:center; }
 }
 .btn-search { }
 .btn-search:hover { }
