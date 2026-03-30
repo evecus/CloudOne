@@ -401,9 +401,9 @@
               <button v-if="sshStatus==='error'||sshStatus==='closed'" class="ssh-reconnect" @click="openSSH">
                 {{ lang==='zh'?'重新连接':'Reconnect' }}
               </button>
-              <router-link v-if="sshStatus==='error'" to="/settings" class="ssh-reconnect ssh-to-settings" @click="closeSSH">
+              <button v-if="sshStatus==='error'" class="ssh-reconnect ssh-to-settings" @click="closeSSH(); showSettings=true">
                 {{ lang==='zh'?'去设置':'Settings' }}
-              </router-link>
+              </button>
             </div>
             <div ref="sshTermEl" class="ssh-term"></div>
             <!-- 移动端虚拟按键栏 -->
