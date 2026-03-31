@@ -143,6 +143,48 @@
             </div>
           </div>
 
+          <!-- SSH -->
+          <div class="sm-card">
+            <h4 class="sm-card-title">SSH</h4>
+            <div class="sm-field">
+              <label>{{ lang === 'zh' ? '主机地址' : 'Host' }}</label>
+              <input v-model="sshForm.host" type="text" placeholder="127.0.0.1" />
+            </div>
+            <div class="sm-field">
+              <label>{{ lang === 'zh' ? '端口' : 'Port' }}</label>
+              <input v-model.number="sshForm.port" type="number" placeholder="22" min="1" max="65535" />
+            </div>
+            <div class="sm-field">
+              <label>{{ lang === 'zh' ? '用户名' : 'Username' }}</label>
+              <input v-model="sshForm.user" type="text" placeholder="root" autocomplete="off" />
+            </div>
+            <div class="sm-field">
+              <label>{{ lang === 'zh' ? '认证方式' : 'Auth Type' }}</label>
+              <div class="ssh-tabs">
+                <button class="ssh-tab" :class="{ active: sshForm.authType === 'password' }" @click="sshForm.authType = 'password'">{{ lang === 'zh' ? '密码' : 'Password' }}</button>
+                <button class="ssh-tab" :class="{ active: sshForm.authType === 'key' }" @click="sshForm.authType = 'key'">{{ lang === 'zh' ? '私钥' : 'Key' }}</button>
+              </div>
+            </div>
+            <div v-if="sshForm.authType === 'password'" class="sm-field">
+              <label>{{ lang === 'zh' ? '密码' : 'Password' }}</label>
+              <input v-model="sshForm.password" type="password"
+                :placeholder="sshHasPassword ? (lang==='zh'?'留空保持不变':'Leave blank to keep') : (lang==='zh'?'输入 SSH 密码':'Enter SSH password')"
+                autocomplete="new-password" />
+              <p v-if="sshHasPassword" class="sm-hint">✓ {{ lang === 'zh' ? '已设置（加密存储）' : 'Set (encrypted)' }}</p>
+            </div>
+            <div v-if="sshForm.authType === 'key'" class="sm-field">
+              <label>{{ lang === 'zh' ? '私钥' : 'Private Key' }}</label>
+              <textarea v-model="sshForm.privateKey" class="sm-key-textarea"
+                :placeholder="sshHasKey ? (lang==='zh'?'留空保持不变':'Leave blank to keep') : (lang==='zh'?'粘贴 PEM 私钥':'Paste PEM private key')"
+                autocomplete="off" spellcheck="false"></textarea>
+              <p v-if="sshHasKey" class="sm-hint">✓ {{ lang === 'zh' ? '已设置（加密存储）' : 'Set (encrypted)' }}</p>
+            </div>
+            <button class="sm-btn" @click="saveSSH">
+              <svg v-if="savedSSH" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>{{ savedSSH ? (lang === 'zh' ? '已保存' : 'Saved!') : (lang === 'zh' ? '保存' : 'Save') }}</span>
+            </button>
+          </div>
+
           <!-- 显示隐藏文件 -->
           <div class="sm-card">
             <h4 class="sm-card-title">{{ lang === 'zh' ? '文件显示' : 'File Display' }}</h4>
@@ -254,6 +296,12 @@ function switchLang(l) {
 const webdavForm = ref({ enabled: false, subPath: '', username: '', password: '' })
 const savedWebDAV = ref(false)
 
+// SSH
+const sshForm = ref({ host: '', port: 22, user: '', authType: 'password', password: '', privateKey: '' })
+const sshHasPassword = ref(false)
+const sshHasKey = ref(false)
+const savedSSH = ref(false)
+
 async function loadWebDAV() {
   try {
     const { data } = await api.get('/webdav/settings')
@@ -273,6 +321,41 @@ async function saveWebDAV() {
   })
   savedWebDAV.value = true
   setTimeout(() => savedWebDAV.value = false, 2000)
+}
+
+async function loadSSH() {
+  try {
+    const { data } = await api.get('/ssh/settings')
+    sshForm.value = {
+      host: data.ssh_host || '127.0.0.1',
+      port: data.ssh_port || 22,
+      user: data.ssh_user || 'root',
+      authType: data.ssh_auth_type || 'password',
+      password: '',
+      privateKey: '',
+    }
+    sshHasPassword.value = data.ssh_has_password
+    sshHasKey.value = data.ssh_has_key
+  } catch(e) {
+    sshForm.value = { host: '127.0.0.1', port: 22, user: 'root', authType: 'password', password: '', privateKey: '' }
+  }
+}
+
+async function saveSSH() {
+  const payload = {
+    ssh_host: sshForm.value.host || '127.0.0.1',
+    ssh_port: sshForm.value.port || 22,
+    ssh_user: sshForm.value.user || 'root',
+    ssh_auth_type: sshForm.value.authType,
+  }
+  if (sshForm.value.authType === 'password' && sshForm.value.password) payload.ssh_password = sshForm.value.password
+  if (sshForm.value.authType === 'key' && sshForm.value.privateKey) payload.ssh_private_key = sshForm.value.privateKey
+  await api.put('/ssh/settings', payload)
+  sshForm.value.password = ''
+  sshForm.value.privateKey = ''
+  savedSSH.value = true
+  await loadSSH()
+  setTimeout(() => savedSSH.value = false, 2000)
 }
 
 function applyFont(uiId, editorId) {
@@ -311,6 +394,7 @@ async function loadData() {
     localStorage.setItem('editorFont', editorFont)
   } catch {}
   await loadWebDAV()
+  await loadSSH()
 }
 
 async function saveUser() {
@@ -525,4 +609,12 @@ watch(() => props.modelValue, (v) => {
   /* 防止 iOS 输入框自动缩放 */
   input, textarea { font-size: 16px !important; }
 }
+
+/* SSH */
+.ssh-tabs { display: flex; gap: 6px; margin-top: 4px; }
+.ssh-tab { padding: 5px 14px; border: 1.5px solid var(--gray-200); border-radius: 6px; background: white; font-size: 13px; font-weight: 500; color: var(--gray-600); cursor: pointer; transition: var(--transition); font-family: inherit; }
+.ssh-tab.active { border-color: var(--blue-500); color: var(--blue-600); background: var(--blue-50); }
+.sm-key-textarea { width: 100%; height: 100px; padding: 8px 12px; border: 1.5px solid var(--gray-200); border-radius: 8px; font-size: 12px; font-family: 'JetBrains Mono', monospace; color: var(--gray-800); outline: none; resize: vertical; transition: var(--transition); box-sizing: border-box; }
+.sm-key-textarea:focus { border-color: var(--blue-500); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+.sm-hint { color: #16A34A; font-size: 12px; margin-top: 4px; }
 </style>
