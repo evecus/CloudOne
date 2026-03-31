@@ -209,6 +209,11 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
               {{ t.newFile }}
             </button>
+            <div class="mob-act-divider"></div>
+            <button class="mob-act-item mob-act-ssh" @click="openSSH();showMobileActions=false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="6 8 10 12 6 16"/><line x1="13" y1="16" x2="17" y2="16"/></svg>
+              SSH
+            </button>
           </div>
           <!-- 选择模式菜单 -->
           <div v-else class="mob-actions-menu" @click.stop>
@@ -2566,6 +2571,7 @@ watch(() => _route.params.pathMatch, (val) => {
   .mob-act-item.danger { color:#EF4444; }
   .mob-act-item.danger svg { color:#EF4444; }
   .mob-act-item.cancel { color:var(--gray-500); }
+  .mob-act-item.mob-act-ssh svg { color:#7c3aed; }
   .mob-act-divider { height:1px; background:var(--gray-100); margin:4px 0; }
   .mob-act-select-info {
     display:flex; align-items:center; gap:8px;
