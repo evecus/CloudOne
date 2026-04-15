@@ -75,12 +75,6 @@
         </template>
       </div>
 
-      <!-- 顶层提示（平铺模式） -->
-      <div v-if="currentPath === '/'" class="flat-hint">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;flex-shrink:0;color:var(--blue-400)"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        <span>{{ lang === 'zh' ? '已直接显示所有公开的文件和文件夹，不显示上游目录' : 'All public files and folders are shown directly, without parent directories' }}</span>
-      </div>
-
       <div class="content">
         <div v-if="loading" class="loading-state"><div class="spinner-lg"></div></div>
         <div v-else-if="!files.length" class="empty-state">
@@ -229,9 +223,6 @@ onMounted(load)
 .btn-settings { width: 36px; height: 36px; border: 1.5px solid var(--gray-200); border-radius: var(--radius-sm); background: white; display: flex; align-items: center; justify-content: center; color: var(--gray-500); cursor: pointer; transition: var(--transition); }
 .btn-settings svg { width: 17px; height: 17px; }
 .btn-settings:hover { border-color: var(--blue-400); color: var(--blue-600); background: var(--blue-50); }
-
-/* 平铺提示条 */
-.flat-hint { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--gray-500); background: var(--blue-50); border-bottom: 1px solid rgba(59,130,246,.1); padding: 8px 28px; }
 
 /* 面包屑 */
 .breadcrumb { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; padding: 10px 28px 0; }
