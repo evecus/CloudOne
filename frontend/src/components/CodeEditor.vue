@@ -5,6 +5,7 @@
     <!-- 选择模式：原生 textarea，浏览器长按/划选完全正常 -->
     <textarea
       v-if="readonly"
+      ref="textareaEl"
       class="select-textarea"
       :value="modelValue"
       readonly
@@ -46,10 +47,12 @@ const props = defineProps({
 })
 const emit = defineEmits(['update:modelValue'])
 
-const editorEl  = ref(null)
-const isFocused = ref(false)
-const view      = shallowRef(null)
-const langCompartment = new Compartment()
+const editorEl   = ref(null)
+const textareaEl = ref(null)
+const isFocused  = ref(false)
+const view       = shallowRef(null)
+const langCompartment  = new Compartment()
+let savedScrollTop = 0
 
 // ── 语言检测 ────────────────────────────────────────────
 const LANG_MAP = {
@@ -212,13 +215,29 @@ onBeforeUnmount(() => {
 // readonly 切换：在编辑模式和 textarea 模式之间互切
 watch(() => props.readonly, async (isReadonly) => {
   if (isReadonly) {
-    // 切到选择模式：销毁 CodeMirror，让 textarea 接管
+    // 切到选择模式前，先记录 CodeMirror 当前滚动位置
+    if (view.value) {
+      const scroller = view.value.scrollDOM
+      savedScrollTop = scroller ? scroller.scrollTop : 0
+    }
     destroyEditor()
+    // 等 textarea 渲染后，恢复滚动位置
+    await nextTick()
+    if (textareaEl.value) {
+      textareaEl.value.scrollTop = savedScrollTop
+    }
   } else {
-    // 切回编辑模式：等 DOM 更新后重建 CodeMirror
+    // 切回编辑模式前，记录 textarea 的滚动位置
+    if (textareaEl.value) {
+      savedScrollTop = textareaEl.value.scrollTop
+    }
     await nextTick()
     mountEditor()
-    // 把 textarea 期间没有变化的内容同步进去（内容由 v-model 传入，无需额外处理）
+    // 等 CodeMirror 渲染后恢复滚动位置
+    await nextTick()
+    if (view.value) {
+      view.value.scrollDOM.scrollTop = savedScrollTop
+    }
   }
 })
 
