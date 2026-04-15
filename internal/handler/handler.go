@@ -752,10 +752,9 @@ func (h *Handler) BatchDownload(c *gin.Context) {
 	}
 
 	// 收集所有有效的绝对路径
-	storageRoot := h.files.Root()
 	type entry struct {
 		abs     string
-		relRoot string // 相对于 storageRoot 的路径，用作 zip 内路径前缀
+		relRoot string // zip 内路径前缀，只使用文件/目录本身的名称，不包含父路径
 	}
 	var entries []entry
 	for _, rel := range req.Paths {
@@ -763,11 +762,8 @@ func (h *Handler) BatchDownload(c *gin.Context) {
 		if err != nil {
 			continue
 		}
-		relToRoot, err := filepath.Rel(storageRoot, abs)
-		if err != nil {
-			continue
-		}
-		entries = append(entries, entry{abs: abs, relRoot: relToRoot})
+		// 只使用最后一段名称作为 zip 内的根路径，避免打包出多层父目录
+		entries = append(entries, entry{abs: abs, relRoot: filepath.Base(abs)})
 	}
 	if len(entries) == 0 {
 		c.JSON(400, gin.H{"error": "no valid paths"})
