@@ -1145,8 +1145,10 @@ function restoreScroll(pos) {
 }
 
 async function load() {
-  // 如果不是切换文件夹，则记录当前滚动位置并在加载后恢复
-  const scrollPos = _preserveScroll ? 0 : saveScroll()
+  // 优先从 sessionStorage 读取跨页跳转前保存的位置，其次读当前滚动
+  const savedKey = 'files_scroll_' + currentPath.value
+  const sessionPos = parseInt(sessionStorage.getItem(savedKey) || '0', 10)
+  const scrollPos = _preserveScroll ? 0 : (sessionPos > 0 ? sessionPos : saveScroll())
   const shouldRestore = !_preserveScroll
   loading.value = true
   try {
@@ -1163,6 +1165,7 @@ async function load() {
   loading.value = false
   if (shouldRestore && scrollPos > 0) {
     restoreScroll(scrollPos)
+    sessionStorage.removeItem(savedKey)
   }
   _preserveScroll = false
 }
@@ -1531,7 +1534,14 @@ function getFileViewMode(name) {
 // 根据文件类型决定打开方式
 // image → /edit 预览；text → /edit 编辑；unknown → 后端 detect 判断
 const detectingFile = ref(null)  // 正在 detect 的文件，用于显示加载态
+
+function saveScrollBeforeNav() {
+  const el = getScrollEl()
+  if (el) sessionStorage.setItem('files_scroll_' + currentPath.value, String(el.scrollTop))
+}
+
 async function openFile(file) {
+  saveScrollBeforeNav()
   const mode = getFileViewMode(file.name)
   if (mode === 'image' || mode === 'text') {
     _router.push('/edit' + file.path)
