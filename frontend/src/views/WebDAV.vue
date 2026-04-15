@@ -2,12 +2,10 @@
   <Layout>
     <div class="webdav-page">
 
-      <!-- ===== 桌面端顶部栏 ===== -->
       <div class="page-header">
         <h2 class="page-title">{{ t.webdav }}</h2>
       </div>
 
-      <!-- ===== 移动端顶部栏 ===== -->
       <div class="mobile-header">
         <button class="mob-icon-btn" @click="showMobileNav = true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
@@ -16,7 +14,6 @@
         <div style="width:40px"></div>
       </div>
 
-      <!-- 移动端导航抽屉 -->
       <teleport to="body">
         <div v-if="showMobileNav" class="mob-drawer-mask" @click="showMobileNav = false">
           <div class="mob-drawer-left" @click.stop>
@@ -53,17 +50,14 @@
         </div>
       </teleport>
 
-      <!-- ===== 未启用提示 ===== -->
       <div v-if="!settings.webdav_enabled" class="disabled-state">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12H3l9-9 9 9h-2"/><path d="M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/></svg>
         <p>{{ t.webdavDisabled }}</p>
         <button class="btn-go-settings" @click="showSettings = true">{{ t.settings }}</button>
       </div>
 
-      <!-- ===== 已启用内容 ===== -->
       <div v-else class="webdav-content">
 
-        <!-- 连接信息卡片 -->
         <div class="info-card">
           <h3 class="card-title">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -96,28 +90,12 @@
           </div>
         </div>
 
-        <!-- 客户端连接方式 -->
-        <div class="info-card">
-          <h3 class="card-title">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-            {{ t.webdavClients }}
-          </h3>
-          <ul class="client-list">
-            <li>🍎 {{ t.webdavMacOS }}</li>
-            <li>🪟 {{ t.webdavWindows }}</li>
-            <li>📱 {{ t.webdavMobile }}</li>
-            <li>☁️ {{ t.webdavRclone }}</li>
-          </ul>
-        </div>
-
-        <!-- 文件浏览器 -->
         <div class="file-card">
           <div class="file-card-header">
             <h3 class="card-title">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>
               {{ t.webdavFileBrowser }}
             </h3>
-            <!-- 面包屑 -->
             <div class="breadcrumb">
               <button class="crumb-btn" @click="navigate('/')">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
@@ -363,12 +341,6 @@ onMounted(loadSettings)
 .copy-btn:hover { border-color: var(--blue-400); color: var(--blue-600); }
 .copy-btn.copied { border-color: #10B981; color: #10B981; }
 
-.client-list {
-  list-style: none; display: flex; flex-direction: column; gap: 10px;
-  padding: 0; margin: 0;
-}
-.client-list li { font-size: 13px; color: var(--gray-600); line-height: 1.5; }
-
 /* 文件浏览卡片 */
 .file-card {
   background: white; border: 1px solid var(--gray-100);
@@ -438,7 +410,7 @@ onMounted(loadSettings)
 .file-row:hover .file-name { color: var(--blue-600); }
 .col-size, .col-date { font-size: 12px; color: var(--gray-400); }
 
-/* 移动端抽屉（复用 Files.vue 样式变量） */
+/* 移动端抽屉 */
 .mob-drawer-mask {
   position: fixed; inset: 0; background: rgba(15,23,42,.4);
   backdrop-filter: blur(3px); z-index: 400; display: flex;
@@ -467,10 +439,7 @@ onMounted(loadSettings)
 
 @media (max-width: 768px) {
   .page-header { display: none; }
-
-  /* 移动端页面整体可滚动，不锁死 */
   .webdav-page { overflow-y: auto; }
-  /* 已启用时内容区不再自己滚动，交给外层 */
   .webdav-content { overflow-y: visible; }
 
   .mobile-header {
