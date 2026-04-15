@@ -375,10 +375,22 @@ watch(() => props.filename, (name) => {
 
 @media (max-width: 480px) {
   .cm-editor-container :deep(.cm-gutters) {
-    display: none;
+    min-width: unset !important;
+    width: auto !important;
+    border-right: 1px solid #F1F5F9;
+  }
+  .cm-editor-container :deep(.cm-lineNumbers .cm-gutterElement) {
+    min-width: unset !important;
+    width: auto !important;
+    padding: 0 4px;
+    font-size: 10px;
+    color: #CBD5E1;
+    letter-spacing: -0.3px;
   }
   .cm-editor-container :deep(.cm-content) {
-    padding-left: 12px;
+    padding-left: 4px;
   }
 }
+
+
 </style>
