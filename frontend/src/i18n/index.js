@@ -74,7 +74,7 @@ export const messages = {
     permApply: '应用',
     permSuccess: '权限已更新',
     binaryFile: '二进制文件无法在线编辑',
-    selectMode: '选择',
+    selectMode: '多选',
     cancelSelect: '取消',
     batchDelete: '删除',
     batchDownload: '打包下载',
