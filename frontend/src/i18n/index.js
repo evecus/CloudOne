@@ -228,7 +228,7 @@ export const messages = {
     permApply: 'Apply',
     permSuccess: 'Permissions updated',
     binaryFile: 'Binary files cannot be edited online',
-    selectMode: 'Select',
+    selectMode: 'Multiple Choice',
     cancelSelect: 'Cancel',
     batchDelete: 'Delete',
     batchDownload: 'Download ZIP',
