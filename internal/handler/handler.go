@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -1373,7 +1374,39 @@ func (h *Handler) DecompressFile(c *gin.Context) {
 	c.JSON(200, gin.H{"ok": true})
 }
 
-// ── FetchURL（SSRF 防护加强版）────────────────────────────────────────────────
+// ── FetchURL（SSRF 防护加强版 + GitHub 代理自动重试）──────────────────────────
+
+// githubProxyPrefixes 是当直连 GitHub 下载失败时，依次尝试的代理前缀列表
+var githubProxyPrefixes = []string{
+	"https://ghfast.top/",
+	"https://gh-proxy.com/",
+	"https://gh.ddlc.top/",
+	"https://ghproxy.it/",
+}
+
+// isGithubURL 判断是否是常见的 GitHub 链接
+func isGithubURL(rawURL string) bool {
+	githubHosts := []string{
+		"github.com",
+		"raw.githubusercontent.com",
+		"objects.githubusercontent.com",
+		"codeload.github.com",
+		"releases.githubusercontent.com",
+		"gist.githubusercontent.com",
+		"gist.github.com",
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	for _, gh := range githubHosts {
+		if host == gh || strings.HasSuffix(host, "."+gh) {
+			return true
+		}
+	}
+	return false
+}
 
 func (h *Handler) FetchURL(c *gin.Context) {
 	var req struct {
@@ -1407,68 +1440,99 @@ func (h *Handler) FetchURL(c *gin.Context) {
 		return
 	}
 
-	// 用 Go 标准库 net/http 下载，流式写入磁盘，无外部命令依赖
+	// 使用客户端请求的 context，客户端断开连接时自动取消下载
+	ctx := c.Request.Context()
+
 	httpClient := &http.Client{
-		Timeout: 30 * time.Minute, // 大文件给足时间
+		Timeout: 30 * time.Minute,
 		CheckRedirect: func(r *http.Request, via []*http.Request) error {
 			if len(via) >= 10 {
 				return fmt.Errorf("too many redirects")
 			}
-			// 每次重定向都重新校验目标 URL（防 DNS 重绑定）
 			return validatePublicURL(r.URL.String())
 		},
 	}
 
-	resp, err := httpClient.Get(req.URL)
-	if err != nil {
-		c.JSON(500, gin.H{"error": "fetch failed: " + err.Error()})
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		c.JSON(500, gin.H{"error": fmt.Sprintf("remote returned %d", resp.StatusCode)})
-		return
+	// 构建待尝试的 URL 列表：先直连，如果是 GitHub 链接则追加各代理前缀
+	urlsToTry := []string{req.URL}
+	if isGithubURL(req.URL) {
+		for _, prefix := range githubProxyPrefixes {
+			urlsToTry = append(urlsToTry, prefix+req.URL)
+		}
 	}
 
-	// 确定保存文件名
+	// 确定保存文件名（从原始 URL 推断，避免代理前缀影响）
 	filename := req.Filename
 	if filename == "" {
-		// 从 URL 或 Content-Disposition 推断
-		if cd := resp.Header.Get("Content-Disposition"); cd != "" {
-			if _, params, err := mime.ParseMediaType(cd); err == nil {
-				if fn, ok := params["filename"]; ok && fn != "" {
-					filename = filepath.Base(fn)
-				}
-			}
-		}
-		if filename == "" {
-			u, _ := url.Parse(req.URL)
-			filename = filepath.Base(u.Path)
-		}
+		u, _ := url.Parse(req.URL)
+		filename = filepath.Base(u.Path)
 		if filename == "" || filename == "." || filename == "/" {
 			filename = "download"
 		}
 	}
-	// 清理文件名，防止路径穿越
 	filename = filepath.Base(filepath.Clean(filename))
-
 	outPath := filepath.Join(absDir, filename)
+
+	var lastErr error
+	for _, tryURL := range urlsToTry {
+		// 检查客户端是否已断开
+		select {
+		case <-ctx.Done():
+			c.JSON(499, gin.H{"error": "download cancelled by client"})
+			return
+		default:
+		}
+
+		reqCtx, cancel := context.WithCancel(ctx)
+		success, dlErr := fetchURLOnce(reqCtx, httpClient, tryURL, outPath)
+		cancel()
+
+		if success {
+			c.JSON(200, gin.H{"ok": true})
+			return
+		}
+		lastErr = dlErr
+
+		// 如果客户端已断开，不再重试
+		if ctx.Err() != nil {
+			c.JSON(499, gin.H{"error": "download cancelled by client"})
+			return
+		}
+	}
+
+	// 所有尝试都失败
+	c.JSON(500, gin.H{"error": lastErr.Error()})
+}
+
+// fetchURLOnce 尝试从 tryURL 下载到 outPath，返回是否成功及错误信息
+func fetchURLOnce(ctx context.Context, client *http.Client, tryURL, outPath string) (bool, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, tryURL, nil)
+	if err != nil {
+		return false, fmt.Errorf("fetch failed: %w", err)
+	}
+
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return false, fmt.Errorf("fetch failed [%s]: %w", tryURL, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return false, fmt.Errorf("remote returned %d [%s]", resp.StatusCode, tryURL)
+	}
+
+	// 如果 filename 未指定，尝试从 Content-Disposition 更新（仅对原始直连有意义）
 	f, err := os.Create(outPath)
 	if err != nil {
-		c.JSON(500, gin.H{"error": "cannot create file: " + err.Error()})
-		return
+		return false, fmt.Errorf("cannot create file: %w", err)
 	}
 	defer f.Close()
 
-	// 流式写入，io.Copy 只用 32KB buffer，不管文件多大内存都不增长
 	if _, err := io.Copy(f, resp.Body); err != nil {
-		os.Remove(outPath) // 下载失败清理残留
-		c.JSON(500, gin.H{"error": "download interrupted: " + err.Error()})
-		return
+		os.Remove(outPath)
+		return false, fmt.Errorf("download interrupted [%s]: %w", tryURL, err)
 	}
-
-	c.JSON(200, gin.H{"ok": true})
+	return true, nil
 }
 
 // validatePublicURL DNS 解析后校验 IP，防止 DNS 重绑定和 IP 格式绕过
