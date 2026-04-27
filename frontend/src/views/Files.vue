@@ -20,7 +20,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
             {{ t.selectMode }}
           </button>
-          <button class="btn-action btn-fetch" @click="showFetch = true">
+          <button class="btn-action btn-fetch" @click="openFetch">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/><path d="M3 3h4m0 0V7m0-4L3 7"/><line x1="3" y1="3" x2="7" y2="7"/></svg>
             {{ t.fetchFile }}
           </button>
@@ -184,7 +184,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
               {{ t.selectMode }}
             </button>
-            <button class="mob-act-item fetch" @click="showFetch=true;showMobileActions=false">
+            <button class="mob-act-item fetch" @click="openFetch();showMobileActions=false">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               {{ t.fetchFile }}
             </button>
@@ -920,7 +920,7 @@
       </div>
 
       <!-- 远程获取弹窗 -->
-      <div v-if="showFetch" class="modal-bg modal-bg-centered" @click.self="showFetch=false">
+      <div v-if="showFetch" class="modal-bg modal-bg-centered" @click.self="closeFetch">
         <div class="modal modal-md">
           <h3>{{ t.fetchTitle }}</h3>
           <div class="field">
@@ -940,7 +940,11 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               {{ t.confirm }}
             </button>
-            <button class="btn-ghost" @click="showFetch=false;fetchError=''">{{ t.cancel }}</button>
+            <button class="btn-ghost btn-bg-fetch" :disabled="!fetching" @click="doFetchBackground">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              {{ lang==='zh' ? '后台下载' : 'Background' }}
+            </button>
+            <button class="btn-ghost" @click="closeFetch">{{ t.cancel }}</button>
           </div>
         </div>
       </div>
@@ -1004,6 +1008,22 @@ const showBatchDelete = ref(false)
 const showDirModal = ref(false)
 const showCompress = ref(false)
 const showFetch = ref(false)
+let fetchAbortController = null
+
+function openFetch() {
+  showFetch.value = true
+}
+
+function closeFetch() {
+  // 取消正在进行的下载请求
+  if (fetchAbortController) {
+    fetchAbortController.abort()
+    fetchAbortController = null
+  }
+  showFetch.value = false
+  fetching.value = false
+  fetchError.value = ''
+}
 const showRename = ref(false)
 const extractTarget = ref(null)
 const renameTarget = ref(null)
@@ -1468,13 +1488,47 @@ async function jumpToSearchResult() {
 async function doFetch() {
   if (!fetchForm.value.url) return
   fetching.value = true; fetchError.value = ''
+  fetchAbortController = new AbortController()
   try {
-    await api.post('/files/fetch-url', { url: fetchForm.value.url, filename: fetchForm.value.filename, dir: currentPath.value })
+    await api.post('/files/fetch-url', { url: fetchForm.value.url, filename: fetchForm.value.filename, dir: currentPath.value }, { signal: fetchAbortController.signal })
+    fetchAbortController = null
     showFetch.value = false; fetchForm.value = { url:'', filename:'' }; load()
   } catch (e) {
-    fetchError.value = e.response?.data?.error || (lang.value==='zh'?'获取失败，请检查链接':'Fetch failed')
+    if (e.name === 'CanceledError' || e.name === 'AbortError' || e.code === 'ERR_CANCELED') {
+      // 用户主动取消，不显示错误
+    } else {
+      fetchError.value = e.response?.data?.error || (lang.value==='zh'?'获取失败，请检查链接':'Fetch failed')
+    }
   }
+  fetchAbortController = null
   fetching.value = false
+}
+
+function doFetchBackground() {
+  if (!fetching.value || !fetchAbortController) return
+  // 记录当前下载信息，关闭弹窗
+  const bgUrl = fetchForm.value.url
+  const bgFilename = fetchForm.value.filename
+  showFetch.value = false
+  showToast(lang.value === 'zh' ? '正在后台下载...' : 'Downloading in background...')
+  // 等待当前请求完成（不 abort），完成后刷新文件列表并通知
+  const waitAndRefresh = async () => {
+    // 等待 fetching 变为 false（即请求结束）
+    await new Promise(resolve => {
+      const check = setInterval(() => {
+        if (!fetching.value) { clearInterval(check); resolve() }
+      }, 500)
+    })
+    if (!fetchError.value) {
+      showToast(lang.value === 'zh' ? `下载完成` : 'Download complete')
+      load()
+    } else {
+      showToast(lang.value === 'zh' ? `后台下载失败: ${fetchError.value}` : `Background download failed: ${fetchError.value}`)
+    }
+    fetchForm.value = { url:'', filename:'' }
+    fetchError.value = ''
+  }
+  waitAndRefresh()
 }
 
 // ── 文件操作工具函数 ──────────────────────────────
@@ -2376,6 +2430,7 @@ watch(() => _route.params.pathMatch, (val) => {
 .format-option.active .format-ext { color:var(--blue-500); }
 .compress-progress { display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--blue-50); border-radius:8px; font-size:13px; color:var(--blue-700); margin-top:12px; }
 .fetch-error { margin-top:10px; padding:10px 14px; background:rgba(239,68,68,.08); border-radius:8px; font-size:13px; color:#dc2626; }
+.btn-bg-fetch:disabled { opacity:0.38; cursor:not-allowed; pointer-events:none; }
 .search-scope-hint { font-size:12px; color:var(--gray-400); margin:6px 0 4px; display:flex; align-items:center; gap:3px; }
 .search-scope-hint strong { color:var(--gray-600); font-weight:600; }
 /* 搜索目录输入框 */
