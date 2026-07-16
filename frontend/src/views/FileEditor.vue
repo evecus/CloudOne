@@ -66,25 +66,10 @@
         <img :src="previewUrl" :alt="filename" class="preview-img" />
       </div>
 
-      <!-- 文本预览：原生 textarea，选中/复制体验最佳 -->
-      <div v-else-if="(mode === 'text' || forceText) && isPreviewing" class="preview-text-wrap">
-        <p v-if="contentError" class="edit-error">{{ contentError }}</p>
-        <textarea
-          v-else
-          class="preview-textarea"
-          :value="content"
-          readonly
-          spellcheck="false"
-          autocomplete="off"
-          autocorrect="off"
-          autocapitalize="off"
-        ></textarea>
-      </div>
-
-      <!-- 文本编辑器 -->
+      <!-- 文本预览/编辑：统一使用 CodeMirror，预览态传 readonly，行号/高亮样式完全一致 -->
       <div v-else-if="mode === 'text' || forceText" class="editor-cm-wrap">
         <p v-if="contentError" class="edit-error">{{ contentError }}</p>
-        <CodeEditor v-else v-model="content" :filename="filename" />
+        <CodeEditor v-else v-model="content" :filename="filename" :readonly="isPreviewing" />
       </div>
     </div>
   </div>
@@ -463,41 +448,6 @@ onBeforeUnmount(() => {
   max-height: 100%;
   object-fit: contain;
   border-radius: 6px;
-}
-
-/* 文本预览：原生 textarea，选中/复制体验最佳，不做任何拦截 */
-.preview-text-wrap {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
-  border-radius: 10px;
-  border: 1.5px solid var(--gray-200, #E2E8F0);
-  background: #fff;
-}
-.preview-textarea {
-  flex: 1;
-  width: 100%;
-  height: 100%;
-  padding: 14px 16px;
-  border: none;
-  outline: none;
-  resize: none;
-  background: #F8FAFC;
-  color: #1E293B;
-  font-family: 'JetBrains Mono', 'Courier New', monospace;
-  font-size: 15px;
-  font-weight: 500;
-  line-height: 1.65;
-  overflow: auto;
-  -webkit-user-select: text;
-  user-select: text;
-  touch-action: auto;
-  cursor: text;
-}
-@media (max-width: 640px) {
-  .preview-textarea { font-size: 14px; }
 }
 
 /* 不支持类型 */
