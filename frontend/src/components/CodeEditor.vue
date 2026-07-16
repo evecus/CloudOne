@@ -1,5 +1,5 @@
 <template>
-  <div class="cm-editor-wrap" :class="{ 'cm-focused': isFocused }">
+  <div class="cm-editor-wrap" :class="{ 'cm-focused': isFocused, 'cm-readonly': props.readonly }">
     <div class="cm-lang-badge" v-if="langLabel">{{ langLabel }}</div>
     <div ref="editorEl" class="cm-editor-container"></div>
   </div>
@@ -28,6 +28,7 @@ import { go } from '@codemirror/lang-go'
 const props = defineProps({
   modelValue: { type: String, default: '' },
   filename:   { type: String, default: '' },
+  readonly:   { type: Boolean, default: false },
 })
 const emit = defineEmits(['update:modelValue'])
 
@@ -35,6 +36,7 @@ const editorEl   = ref(null)
 const isFocused  = ref(false)
 const view       = shallowRef(null)
 const langCompartment  = new Compartment()
+const readOnlyCompartment = new Compartment()
 
 // ── 语言检测 ────────────────────────────────────────────
 const LANG_MAP = {
@@ -162,6 +164,10 @@ function mountEditor() {
       keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
       lightTheme,
       langCompartment.of(langExts),
+      readOnlyCompartment.of([
+        EditorState.readOnly.of(props.readonly),
+        EditorView.editable.of(!props.readonly),
+      ]),
       EditorView.updateListener.of(update => {
         if (update.docChanged) {
           emit('update:modelValue', update.state.doc.toString())
@@ -212,6 +218,17 @@ watch(() => props.filename, (name) => {
     effects: langCompartment.reconfigure(langExts)
   })
 })
+
+// readonly 变更时切换编辑器可编辑状态（如预览/编辑模式切换共用同一实例）
+watch(() => props.readonly, (ro) => {
+  if (!view.value) return
+  view.value.dispatch({
+    effects: readOnlyCompartment.reconfigure([
+      EditorState.readOnly.of(ro),
+      EditorView.editable.of(!ro),
+    ])
+  })
+})
 </script>
 
 <style scoped>
@@ -232,6 +249,25 @@ watch(() => props.filename, (name) => {
 .cm-editor-wrap.cm-focused {
   border-color: var(--blue-400);
   box-shadow: 0 0 0 2px var(--blue-100);
+}
+
+/* 只读（预览）模式：去掉聚焦高亮，光标/选区样式更接近静态查看 */
+.cm-editor-wrap.cm-readonly {
+  background: #F8FAFC;
+}
+.cm-editor-wrap.cm-readonly.cm-focused {
+  border-color: var(--blue-100);
+  box-shadow: none;
+}
+.cm-editor-wrap.cm-readonly :deep(.cm-content) {
+  cursor: text;
+}
+.cm-editor-wrap.cm-readonly :deep(.cm-cursor) {
+  display: none;
+}
+.cm-editor-wrap.cm-readonly :deep(.cm-activeLine),
+.cm-editor-wrap.cm-readonly :deep(.cm-activeLineGutter) {
+  background: transparent;
 }
 
 /* 语言标签 */
