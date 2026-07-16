@@ -6,18 +6,13 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       release_tag: ${{ steps.set_tag.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Set Release Tag
-        id: set_tag
-        run: |
-          # 生成北京时间戳作为版本号
-          TAG_NAME=$(TZ='Asia/Shanghai' date +'%Y.%m.%d-%H%M')
-          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -57,32 +52,15 @@ jobs:
             cloudone-linux-arm64
           if-no-files-found: error
 
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write # 必须拥有写权限才能创建 Release
-
-    steps:
-      - name: Download binaries from build job
-        uses: actions/download-artifact@v4
-        with:
-          name: raw-binaries
-          path: ./release_files
-
-      - name: Ensure Execution Permissions
-        run: chmod +x ./release_files/cloudone-*
-
       - name: Create GitHub Pre-release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.build.outputs.release_tag }}
-          name: CloudOne Pre-release ${{ needs.build.outputs.release_tag }}
+          tag_name: test
+          name: CloudOne test
           prerelease: true # 标记为预发布
           draft: false
-          generate_release_notes: true
-          # 核心：直接指定二进制文件路径，不使用目录名，防止被二次压缩
+          generate_release_notes: false
           files: |
-            ./release_files/cloudone-linux-arm64
+            cloudone-linux-arm64
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
