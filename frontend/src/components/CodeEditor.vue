@@ -7,7 +7,7 @@
 
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount, shallowRef } from 'vue'
-import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightSpecialChars, drawSelection, highlightActiveLine } from '@codemirror/view'
+import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightSpecialChars, highlightActiveLine } from '@codemirror/view'
 import { EditorState, Compartment } from '@codemirror/state'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, foldGutter, indentOnInput } from '@codemirror/language'
@@ -154,7 +154,6 @@ function mountEditor() {
       highlightSpecialChars(),
       history(),
       foldGutter(),
-      drawSelection(),
       EditorState.allowMultipleSelections.of(true),
       indentOnInput(),
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
@@ -301,9 +300,6 @@ watch(() => props.filename, (name) => {
     user-select: text !important;
     touch-action: auto !important;
     cursor: text !important;
-  }
-  .cm-editor-container :deep(.cm-selectionBackground) {
-    background: #BFDBFE !important;
   }
   .cm-editor-container :deep(.cm-lineNumbers .cm-gutterElement) {
     min-width: 26px;
