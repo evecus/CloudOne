@@ -6,11 +6,11 @@ on:
         description: '选择要编译的架构'
         required: true
         type: choice
-        default: 'both'
+        default: 'arm64'
         options:
-          - both
           - amd64
           - arm64
+          - both
 jobs:
   build:
     runs-on: ubuntu-latest
