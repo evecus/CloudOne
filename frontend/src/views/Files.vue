@@ -1242,9 +1242,8 @@ function exitSelectAndClose(which) {
 // ── 右键菜单（已由左键点击接管，此函数保留兼容） ──
 function closeCtxMenu() { ctxMenu.value = { show:false, x:0, y:0, file:null } }
 
-// 右键点击文件夹时弹出操作菜单（文件不响应右键）
+// 右键点击文件/文件夹均弹出操作菜单
 function handleRowContextMenu(e, file) {
-  if (!file.is_dir) return  // 文件右键不处理
   if (selectMode.value) return
   openCtxMenuAt(e.clientX, e.clientY, file)
 }
@@ -1269,10 +1268,9 @@ function openCtxMenuAt(clientX, clientY, file) {
   })
 }
 
-// 移动端长按：文件夹长按弹出操作菜单（固定位置，居中底部）
+// 移动端长按：文件/文件夹均长按弹出操作菜单（固定位置，居中底部）
 let longPressTimer = null
 function handleTouchStart(e, file) {
-  if (!file.is_dir) return
   if (selectMode.value) return
   longPressTimer = setTimeout(() => {
     longPressTimer = null
