@@ -53,14 +53,22 @@ jobs:
           CGO_ENABLED: 0
         run: |
           go build -ldflags="-s -w" -o cloudone-linux-arm64 .
-      - name: Upload binaries to temporary storage
-        uses: actions/upload-artifact@v4
-        with:
-          name: raw-binaries
-          path: |
-            cloudone-linux-amd64
-            cloudone-linux-arm64
-          if-no-files-found: ignore
+
+      - name: Install ARM64 cross compiler
+        if: ${{ github.event.inputs.arch == 'arm64' || github.event.inputs.arch == 'both' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build for Linux arm64 (cgo=1)
+        if: ${{ github.event.inputs.arch == 'arm64' || github.event.inputs.arch == 'both' }}
+        env:
+          GOOS: linux
+          GOARCH: arm64
+          CGO_ENABLED: 1
+          CC: aarch64-linux-gnu-gcc
+        run: go build -ldflags="-s -w" -o cloudone-linux-arm64-cgo .
+  
       - name: Create GitHub Pre-release
         uses: softprops/action-gh-release@v2
         with:
@@ -70,7 +78,6 @@ jobs:
           draft: false
           generate_release_notes: false
           files: |
-            cloudone-linux-amd64
-            cloudone-linux-arm64
+            cloudone-*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
