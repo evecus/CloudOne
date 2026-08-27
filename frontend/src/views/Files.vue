@@ -14,8 +14,124 @@
           </template>
         </div>
 
-        <!-- 普通模式按钮：仅保留设置与退出登录，其余操作已移至空白区域右键菜单 -->
+        <!-- 普通模式按钮 -->
         <div v-if="!selectMode" class="header-actions">
+          <button class="btn-select" @click="enterSelectMode">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            {{ t.selectMode }}
+          </button>
+          <button class="btn-action btn-fetch" @click="openFetch">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/><path d="M3 3h4m0 0V7m0-4L3 7"/><line x1="3" y1="3" x2="7" y2="7"/></svg>
+            {{ t.fetchFile }}
+          </button>
+          <button class="btn-action btn-search" @click="openSearch">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            {{ t.search }}
+          </button>
+          <!-- 上传下拉 -->
+          <div class="btn-dropdown-wrap" ref="uploadDropRef">
+            <button class="btn-action btn-dropdown-trigger" @click="showUploadDrop=!showUploadDrop">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              {{ lang==='zh' ? '上传' : 'Upload' }}
+              <svg class="dropdown-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div v-if="showUploadDrop" class="btn-dropdown-menu">
+              <div class="btn-dropdown-item" @click="showUpload=true;stagedFiles=[];uploadDone=false;uploadProgress=[];showUploadDrop=false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                {{ lang==='zh' ? '上传文件' : 'Upload File' }}
+              </div>
+              <div class="btn-dropdown-item" @click="showFolderUpload=true;showUploadDrop=false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                {{ lang==='zh' ? '上传文件夹' : 'Upload Folder' }}
+              </div>
+            </div>
+          </div>
+          <!-- 新建下拉 -->
+          <div class="btn-dropdown-wrap" ref="createDropRef">
+            <button class="btn-action btn-dropdown-trigger" @click="showCreateDrop=!showCreateDrop">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              {{ lang==='zh' ? '新建' : 'New' }}
+              <svg class="dropdown-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div v-if="showCreateDrop" class="btn-dropdown-menu">
+              <div class="btn-dropdown-item" @click="showMkdir=true;showCreateDrop=false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+                {{ lang==='zh' ? '新建文件夹' : 'New Folder' }}
+              </div>
+              <div class="btn-dropdown-item" @click="showCreate=true;showCreateDrop=false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                {{ lang==='zh' ? '新建文件' : 'New File' }}
+              </div>
+            </div>
+          </div>
+          <div class="header-divider"></div>
+          <!-- 查看方式下拉 -->
+          <div class="btn-dropdown-wrap" ref="viewDropRef">
+            <button class="btn-action btn-dropdown-trigger" @click="showViewDrop=!showViewDrop">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+              {{ t.view }}
+              <svg class="dropdown-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div v-if="showViewDrop" class="btn-dropdown-menu">
+              <div class="btn-dropdown-item btn-dropdown-item-radio" @click="setViewMode('icon-large');showViewDrop=false">
+                <span class="ctx-radio" :class="{checked: viewMode==='icon-large'}"></span>
+                {{ t.viewIconLarge }}
+              </div>
+              <div class="btn-dropdown-item btn-dropdown-item-radio" @click="setViewMode('icon-small');showViewDrop=false">
+                <span class="ctx-radio" :class="{checked: viewMode==='icon-small'}"></span>
+                {{ t.viewIconSmall }}
+              </div>
+              <div class="btn-dropdown-item btn-dropdown-item-radio" @click="setViewMode('list');showViewDrop=false">
+                <span class="ctx-radio" :class="{checked: viewMode==='list'}"></span>
+                {{ t.viewList }}
+              </div>
+              <div class="btn-dropdown-item btn-dropdown-item-radio" @click="setViewMode('detail');showViewDrop=false">
+                <span class="ctx-radio" :class="{checked: viewMode==='detail'}"></span>
+                {{ t.viewDetail }}
+              </div>
+            </div>
+          </div>
+          <!-- 排序方式下拉 -->
+          <div class="btn-dropdown-wrap" ref="sortDropRef">
+            <button class="btn-action btn-dropdown-trigger" @click="showSortDrop=!showSortDrop">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M6 12h12M10 18h4"/></svg>
+              {{ t.sortBy }}
+              <svg class="dropdown-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div v-if="showSortDrop" class="btn-dropdown-menu">
+              <div class="btn-dropdown-item btn-dropdown-item-radio" @click="setSort('name', sortOrder);showSortDrop=false">
+                <span class="ctx-radio" :class="{checked: sortBy==='name'}"></span>
+                {{ t.sortName }}
+              </div>
+              <div class="btn-dropdown-item btn-dropdown-item-radio" @click="setSort('date', sortOrder);showSortDrop=false">
+                <span class="ctx-radio" :class="{checked: sortBy==='date'}"></span>
+                {{ t.sortDate }}
+              </div>
+              <div class="btn-dropdown-item btn-dropdown-item-radio" @click="setSort('type', sortOrder);showSortDrop=false">
+                <span class="ctx-radio" :class="{checked: sortBy==='type'}"></span>
+                {{ t.sortType }}
+              </div>
+              <div class="btn-dropdown-item btn-dropdown-item-radio" @click="setSort('size', sortOrder);showSortDrop=false">
+                <span class="ctx-radio" :class="{checked: sortBy==='size'}"></span>
+                {{ t.sortSize }}
+              </div>
+              <div class="btn-dropdown-divider"></div>
+              <div class="btn-dropdown-item btn-dropdown-item-radio" @click="setSort(sortBy, 'asc');showSortDrop=false">
+                <span class="ctx-radio" :class="{checked: sortOrder==='asc'}"></span>
+                {{ t.sortAsc }}
+              </div>
+              <div class="btn-dropdown-item btn-dropdown-item-radio" @click="setSort(sortBy, 'desc');showSortDrop=false">
+                <span class="ctx-radio" :class="{checked: sortOrder==='desc'}"></span>
+                {{ t.sortDesc }}
+              </div>
+            </div>
+          </div>
+          <div class="header-divider"></div>
+          <!-- 终端按钮 -->
+          <button class="btn-action btn-ssh" @click="openSSH">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="8 21 12 17 16 21"/><line x1="12" y1="17" x2="12" y2="21"/><polyline points="6 8 10 12 6 16"/><line x1="13" y1="16" x2="17" y2="16"/></svg>
+            {{ lang === 'zh' ? '终端' : 'Terminal' }}
+          </button>
           <button class="btn-settings" @click="showSettings = true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
           </button>
@@ -267,7 +383,7 @@
       </teleport>
 
       <!-- ===== 文件区域 ===== -->
-      <div class="drop-zone" :class="{ dragging }" @dragover.prevent="dragging=true" @dragleave="dragging=false" @drop.prevent="handleDrop" @contextmenu.prevent="handleBlankContextMenu">
+      <div class="drop-zone" :class="{ dragging }" @dragover.prevent="dragging=true" @dragleave="dragging=false" @drop.prevent="handleDrop" @contextmenu.self.prevent>
         <div v-if="loading" class="loading-state"><div class="spinner-lg"></div></div>
         <div v-else-if="!files.length" class="empty-state">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
@@ -421,117 +537,6 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
             <span>{{ t.delete }}</span>
           </div>
-        </div>
-      </div>
-
-      <!-- ===== 空白区域右键菜单（查看方式 / 排序方式，仅桌面端） ===== -->
-      <div v-if="blankMenu.show" class="ctx-overlay" @mousedown.self="closeBlankMenu" @contextmenu.prevent>
-        <div class="ctx-menu blank-menu" :style="{ top: blankMenu.y + 'px', left: blankMenu.x + 'px' }">
-          <!-- 一级：常用操作 + 入口 -->
-          <template v-if="blankMenu.panel === 'main'">
-            <div class="ctx-item" @click="enterSelectMode();closeBlankMenu()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-              <span>{{ t.selectMode }}</span>
-            </div>
-            <div class="ctx-item" @click="openFetch();closeBlankMenu()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              <span>{{ t.fetchFile }}</span>
-            </div>
-            <div class="ctx-item" @click="openSearch();closeBlankMenu()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <span>{{ t.search }}</span>
-            </div>
-            <div class="ctx-item" @click="showUpload=true;stagedFiles=[];uploadDone=false;uploadProgress=[];closeBlankMenu()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              <span>{{ lang==='zh' ? '上传文件' : 'Upload File' }}</span>
-            </div>
-            <div class="ctx-item" @click="showFolderUpload=true;closeBlankMenu()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
-              <span>{{ lang==='zh' ? '上传文件夹' : 'Upload Folder' }}</span>
-            </div>
-            <div class="ctx-item" @click="showMkdir=true;closeBlankMenu()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
-              <span>{{ lang==='zh' ? '新建文件夹' : 'New Folder' }}</span>
-            </div>
-            <div class="ctx-item" @click="showCreate=true;closeBlankMenu()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-              <span>{{ lang==='zh' ? '新建文件' : 'New File' }}</span>
-            </div>
-            <div class="ctx-item" @click="openSSH();closeBlankMenu()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="6 8 10 12 6 16"/><line x1="13" y1="16" x2="17" y2="16"/></svg>
-              <span>{{ lang === 'zh' ? '终端' : 'Terminal' }}</span>
-            </div>
-            <div class="ctx-divider"></div>
-            <div class="ctx-item ctx-item-nav" @click="blankMenuGoto('view')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-              <span>{{ t.view }}</span>
-              <svg class="ctx-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-            </div>
-            <div class="ctx-item ctx-item-nav" @click="blankMenuGoto('sort')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M6 12h12M10 18h4"/></svg>
-              <span>{{ t.sortBy }}</span>
-              <svg class="ctx-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-            </div>
-          </template>
-
-          <!-- 二级：查看方式 -->
-          <template v-else-if="blankMenu.panel === 'view'">
-            <div class="ctx-item ctx-item-back" @click="blankMenuGoto('main')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
-              <span>{{ t.view }}</span>
-            </div>
-            <div class="ctx-divider"></div>
-            <div class="ctx-item ctx-item-radio" @click="blankMenuPickView('icon-large')">
-              <span class="ctx-radio" :class="{checked: viewMode==='icon-large'}"></span>
-              <span>{{ t.viewIconLarge }}</span>
-            </div>
-            <div class="ctx-item ctx-item-radio" @click="blankMenuPickView('icon-small')">
-              <span class="ctx-radio" :class="{checked: viewMode==='icon-small'}"></span>
-              <span>{{ t.viewIconSmall }}</span>
-            </div>
-            <div class="ctx-item ctx-item-radio" @click="blankMenuPickView('list')">
-              <span class="ctx-radio" :class="{checked: viewMode==='list'}"></span>
-              <span>{{ t.viewList }}</span>
-            </div>
-            <div class="ctx-item ctx-item-radio" @click="blankMenuPickView('detail')">
-              <span class="ctx-radio" :class="{checked: viewMode==='detail'}"></span>
-              <span>{{ t.viewDetail }}</span>
-            </div>
-          </template>
-
-          <!-- 二级：排序方式 -->
-          <template v-else-if="blankMenu.panel === 'sort'">
-            <div class="ctx-item ctx-item-back" @click="blankMenuGoto('main')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
-              <span>{{ t.sortBy }}</span>
-            </div>
-            <div class="ctx-divider"></div>
-            <div class="ctx-item ctx-item-radio" @click="blankMenuPickSort('name', sortOrder)">
-              <span class="ctx-radio" :class="{checked: sortBy==='name'}"></span>
-              <span>{{ t.sortName }}</span>
-            </div>
-            <div class="ctx-item ctx-item-radio" @click="blankMenuPickSort('date', sortOrder)">
-              <span class="ctx-radio" :class="{checked: sortBy==='date'}"></span>
-              <span>{{ t.sortDate }}</span>
-            </div>
-            <div class="ctx-item ctx-item-radio" @click="blankMenuPickSort('type', sortOrder)">
-              <span class="ctx-radio" :class="{checked: sortBy==='type'}"></span>
-              <span>{{ t.sortType }}</span>
-            </div>
-            <div class="ctx-item ctx-item-radio" @click="blankMenuPickSort('size', sortOrder)">
-              <span class="ctx-radio" :class="{checked: sortBy==='size'}"></span>
-              <span>{{ t.sortSize }}</span>
-            </div>
-            <div class="ctx-divider"></div>
-            <div class="ctx-item ctx-item-radio" @click="blankMenuPickSort(sortBy, 'asc')">
-              <span class="ctx-radio" :class="{checked: sortOrder==='asc'}"></span>
-              <span>{{ t.sortAsc }}</span>
-            </div>
-            <div class="ctx-item ctx-item-radio" @click="blankMenuPickSort(sortBy, 'desc')">
-              <span class="ctx-radio" :class="{checked: sortOrder==='desc'}"></span>
-              <span>{{ t.sortDesc }}</span>
-            </div>
-          </template>
         </div>
       </div>
 
@@ -1283,9 +1288,15 @@ const searchUsedDir = ref('')  // 本次实际搜索的目录，结果页展示�
 // 右键菜单
 const ctxMenu = ref({ show:false, x:0, y:0, file:null })
 
-// 空白区域右键菜单（查看方式 / 排序方式）
-// panel: 'main' | 'view' | 'sort'
-const blankMenu = ref({ show:false, x:0, y:0, panel:'main' })
+// 顶部工具栏下拉菜单
+const showUploadDrop = ref(false)
+const showCreateDrop = ref(false)
+const showViewDrop = ref(false)
+const showSortDrop = ref(false)
+const uploadDropRef = ref(null)
+const createDropRef = ref(null)
+const viewDropRef = ref(null)
+const sortDropRef = ref(null)
 
 // 移动端查看/排序方式选择弹层（底部弹出）
 // panel: 'view' | 'sort'
@@ -1455,30 +1466,13 @@ function openCtxMenuAt(clientX, clientY, file) {
   })
 }
 
-// ── 空白区域右键菜单（查看方式 / 排序方式）──────────
-function closeBlankMenu() { blankMenu.value = { show:false, x:0, y:0, panel:'main' } }
-function handleBlankContextMenu(e) {
-  if (selectMode.value) return
-  const menuW = 220
-  let x = e.clientX
-  let y = e.clientY
-  if (x + menuW > window.innerWidth) x = window.innerWidth - menuW - 8
-  if (y < 8) y = 8
-  blankMenu.value = { show:true, x, y, panel:'main' }
-  nextTick(() => {
-    const el = document.querySelector('.blank-menu')
-    if (!el) return
-    const menuH = el.offsetHeight
-    if (y + menuH > window.innerHeight - 8) {
-      y = window.innerHeight - menuH - 8
-      if (y < 8) y = 8
-      blankMenu.value = { ...blankMenu.value, y }
-    }
-  })
+// 点击页面其他区域关闭顶部工具栏下拉菜单
+function onDocClick(e) {
+  if (uploadDropRef.value && !uploadDropRef.value.contains(e.target)) showUploadDrop.value = false
+  if (createDropRef.value && !createDropRef.value.contains(e.target)) showCreateDrop.value = false
+  if (viewDropRef.value && !viewDropRef.value.contains(e.target)) showViewDrop.value = false
+  if (sortDropRef.value && !sortDropRef.value.contains(e.target)) showSortDrop.value = false
 }
-function blankMenuGoto(panel) { blankMenu.value = { ...blankMenu.value, panel } }
-function blankMenuPickView(mode) { setViewMode(mode); closeBlankMenu() }
-function blankMenuPickSort(by, order) { setSort(by, order); closeBlankMenu() }
 
 // 移动端长按：文件/文件夹均长按弹出操作菜单（固定位置，居中底部）
 let longPressTimer = null
@@ -2127,7 +2121,7 @@ async function handleDrop(e) {
 }
 
 // 键盘 Esc 关闭右键菜单
-function onKeydown(e) { if (e.key === 'Escape') { closeCtxMenu(); closeBlankMenu() } }
+function onKeydown(e) { if (e.key === 'Escape') { closeCtxMenu(); showUploadDrop.value=false; showCreateDrop.value=false; showViewDrop.value=false; showSortDrop.value=false } }
 
 // Toast
 const toastMsg = ref('')
@@ -2177,12 +2171,14 @@ function onFileSortChanged(e) { sortBy.value = e.detail.by; sortOrder.value = e.
 onMounted(() => {
   load(); loadWebDAVStatus(); loadViewSortSettings()
   document.addEventListener('keydown', onKeydown)
+  document.addEventListener('click', onDocClick)
   window.addEventListener('show-hidden-changed', onShowHiddenChanged)
   window.addEventListener('file-view-mode-changed', onFileViewModeChanged)
   window.addEventListener('file-sort-changed', onFileSortChanged)
 })
 onUnmounted(() => {
   document.removeEventListener('keydown', onKeydown)
+  document.removeEventListener('click', onDocClick)
   window.removeEventListener('show-hidden-changed', onShowHiddenChanged)
   window.removeEventListener('file-view-mode-changed', onFileViewModeChanged)
   window.removeEventListener('file-sort-changed', onFileSortChanged)
@@ -2393,6 +2389,8 @@ watch(() => _route.params.pathMatch, (val) => {
 .btn-dropdown-item { display:flex; align-items:center; gap:8px; padding:9px 14px; font-size:13px; font-weight:500; color:var(--gray-700); cursor:pointer; transition:background .12s; }
 .btn-dropdown-item svg { width:15px; height:15px; flex-shrink:0; }
 .btn-dropdown-item:hover { background:var(--blue-50); color:var(--blue-600); }
+.btn-dropdown-item-radio .ctx-radio { margin-right:0; }
+.btn-dropdown-divider { height:1px; background:var(--gray-100); margin:4px 0; }
 
 /* ── SSH 按钮 ── */
 .btn-ssh { color:var(--gray-600); }
@@ -2638,7 +2636,6 @@ watch(() => _route.params.pathMatch, (val) => {
 .ctx-divider { height:1px; background:var(--gray-100); margin:4px 0; }
 
 /* 空白区域右键菜单：一级/二级面板 */
-.blank-menu { min-width:210px; }
 .ctx-item-nav { justify-content:space-between; }
 .ctx-item-nav span { flex:1; }
 .ctx-chevron { width:14px !important; height:14px !important; margin-left:auto; }
