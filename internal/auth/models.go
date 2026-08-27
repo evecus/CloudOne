@@ -98,6 +98,9 @@ type Settings struct {
 	WebDAVPasswordEnc string `json:"-"` // AES-GCM(bcrypt(password))
 	JWTSecretEnc      string `json:"-"` // AES-GCM(jwt_secret)
 	ShowHidden        bool   `json:"show_hidden"`
+	FileViewMode      string `json:"file_view_mode"`  // list | detail | icon-large | icon-small
+	FileSortBy        string `json:"file_sort_by"`    // name | date | type | size
+	FileSortOrder     string `json:"file_sort_order"` // asc | desc
 	GithubProxyEnabled bool  `json:"github_proxy_enabled"`
 }
 
@@ -174,7 +177,7 @@ func InitDB(path string) (*gorm.DB, error) {
 	var count int64
 	db.Model(&Settings{}).Count(&count)
 	if count == 0 {
-		db.Create(&Settings{StorageDir: "./data/storage", Lang: "zh"})
+		db.Create(&Settings{StorageDir: "./data/storage", Lang: "zh", FileViewMode: "detail", FileSortBy: "name", FileSortOrder: "asc"})
 	}
 
 	return db, nil

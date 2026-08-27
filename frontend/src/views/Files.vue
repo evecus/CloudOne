@@ -14,63 +14,8 @@
           </template>
         </div>
 
-        <!-- 普通模式按钮 -->
+        <!-- 普通模式按钮：仅保留设置与退出登录，其余操作已移至空白区域右键菜单 -->
         <div v-if="!selectMode" class="header-actions">
-          <button class="btn-select" @click="enterSelectMode">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-            {{ t.selectMode }}
-          </button>
-          <button class="btn-action btn-fetch" @click="openFetch">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/><path d="M3 3h4m0 0V7m0-4L3 7"/><line x1="3" y1="3" x2="7" y2="7"/></svg>
-            {{ t.fetchFile }}
-          </button>
-          <button class="btn-action btn-search" @click="openSearch">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            {{ t.search }}
-          </button>
-          <!-- 上传下拉 -->
-          <div class="btn-dropdown-wrap" ref="uploadDropRef">
-            <button class="btn-action btn-dropdown-trigger" @click="showUploadDrop=!showUploadDrop">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              {{ lang==='zh' ? '上传' : 'Upload' }}
-              <svg class="dropdown-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-            <div v-if="showUploadDrop" class="btn-dropdown-menu">
-              <div class="btn-dropdown-item" @click="showUpload=true;stagedFiles=[];uploadDone=false;uploadProgress=[];showUploadDrop=false">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                {{ lang==='zh' ? '上传文件' : 'Upload File' }}
-              </div>
-              <div class="btn-dropdown-item" @click="showFolderUpload=true;showUploadDrop=false">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
-                {{ lang==='zh' ? '上传文件夹' : 'Upload Folder' }}
-              </div>
-            </div>
-          </div>
-          <input ref="folderInput" type="file" webkitdirectory multiple @change="confirmFolderUpload" style="display:none" />
-          <!-- 新建下拉 -->
-          <div class="btn-dropdown-wrap" ref="createDropRef">
-            <button class="btn-action btn-dropdown-trigger" @click="showCreateDrop=!showCreateDrop">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              {{ lang==='zh' ? '新建' : 'New' }}
-              <svg class="dropdown-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-            <div v-if="showCreateDrop" class="btn-dropdown-menu">
-              <div class="btn-dropdown-item" @click="showMkdir=true;showCreateDrop=false">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
-                {{ lang==='zh' ? '新建文件夹' : 'New Folder' }}
-              </div>
-              <div class="btn-dropdown-item" @click="showCreate=true;showCreateDrop=false">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-                {{ lang==='zh' ? '新建文件' : 'New File' }}
-              </div>
-            </div>
-          </div>
-          <div class="header-divider"></div>
-          <!-- 终端按钮 -->
-          <button class="btn-action btn-ssh" @click="openSSH">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="8 21 12 17 16 21"/><line x1="12" y1="17" x2="12" y2="21"/><polyline points="6 8 10 12 6 16"/><line x1="13" y1="16" x2="17" y2="16"/></svg>
-            {{ lang === 'zh' ? '终端' : 'Terminal' }}
-          </button>
           <button class="btn-settings" @click="showSettings = true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
           </button>
@@ -193,6 +138,15 @@
               {{ t.search }}
             </button>
             <div class="mob-act-divider"></div>
+            <button class="mob-act-item" @click="openMobileViewSort('view');showMobileActions=false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+              {{ t.view }}
+            </button>
+            <button class="mob-act-item" @click="openMobileViewSort('sort');showMobileActions=false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M6 12h12M10 18h4"/></svg>
+              {{ t.sortBy }}
+            </button>
+            <div class="mob-act-divider"></div>
             <button class="mob-act-item" @click="showFolderUpload=true;showMobileActions=false">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><polyline points="12 11 12 17"/><polyline points="9 14 12 11 15 14"/></svg>
               {{ t.uploadFolder }}
@@ -255,14 +209,73 @@
         </div>
       </teleport>
 
+      <!-- ===== 移动端：查看方式 / 排序方式 底部弹层 ===== -->
+      <teleport to="body">
+        <div v-if="mobileViewSort.show" class="mob-actions-mask" @click="closeMobileViewSort">
+          <div class="mob-actions-menu mob-viewsort-menu" @click.stop>
+            <template v-if="mobileViewSort.panel === 'view'">
+              <div class="mob-act-sheet-title">{{ t.view }}</div>
+              <div class="mob-act-divider"></div>
+              <button class="mob-act-item mob-act-radio" @click="setViewMode('icon-large');closeMobileViewSort()">
+                <span class="ctx-radio" :class="{checked: viewMode==='icon-large'}"></span>
+                {{ t.viewIconLarge }}
+              </button>
+              <button class="mob-act-item mob-act-radio" @click="setViewMode('icon-small');closeMobileViewSort()">
+                <span class="ctx-radio" :class="{checked: viewMode==='icon-small'}"></span>
+                {{ t.viewIconSmall }}
+              </button>
+              <button class="mob-act-item mob-act-radio" @click="setViewMode('list');closeMobileViewSort()">
+                <span class="ctx-radio" :class="{checked: viewMode==='list'}"></span>
+                {{ t.viewList }}
+              </button>
+              <button class="mob-act-item mob-act-radio" @click="setViewMode('detail');closeMobileViewSort()">
+                <span class="ctx-radio" :class="{checked: viewMode==='detail'}"></span>
+                {{ t.viewDetail }}
+              </button>
+            </template>
+            <template v-else>
+              <div class="mob-act-sheet-title">{{ t.sortBy }}</div>
+              <div class="mob-act-divider"></div>
+              <button class="mob-act-item mob-act-radio" @click="setSort('name', sortOrder);closeMobileViewSort()">
+                <span class="ctx-radio" :class="{checked: sortBy==='name'}"></span>
+                {{ t.sortName }}
+              </button>
+              <button class="mob-act-item mob-act-radio" @click="setSort('date', sortOrder);closeMobileViewSort()">
+                <span class="ctx-radio" :class="{checked: sortBy==='date'}"></span>
+                {{ t.sortDate }}
+              </button>
+              <button class="mob-act-item mob-act-radio" @click="setSort('type', sortOrder);closeMobileViewSort()">
+                <span class="ctx-radio" :class="{checked: sortBy==='type'}"></span>
+                {{ t.sortType }}
+              </button>
+              <button class="mob-act-item mob-act-radio" @click="setSort('size', sortOrder);closeMobileViewSort()">
+                <span class="ctx-radio" :class="{checked: sortBy==='size'}"></span>
+                {{ t.sortSize }}
+              </button>
+              <div class="mob-act-divider"></div>
+              <button class="mob-act-item mob-act-radio" @click="setSort(sortBy, 'asc');closeMobileViewSort()">
+                <span class="ctx-radio" :class="{checked: sortOrder==='asc'}"></span>
+                {{ t.sortAsc }}
+              </button>
+              <button class="mob-act-item mob-act-radio" @click="setSort(sortBy, 'desc');closeMobileViewSort()">
+                <span class="ctx-radio" :class="{checked: sortOrder==='desc'}"></span>
+                {{ t.sortDesc }}
+              </button>
+            </template>
+          </div>
+        </div>
+      </teleport>
+
       <!-- ===== 文件区域 ===== -->
-      <div class="drop-zone" :class="{ dragging }" @dragover.prevent="dragging=true" @dragleave="dragging=false" @drop.prevent="handleDrop" @contextmenu.self.prevent>
+      <div class="drop-zone" :class="{ dragging }" @dragover.prevent="dragging=true" @dragleave="dragging=false" @drop.prevent="handleDrop" @contextmenu.prevent="handleBlankContextMenu">
         <div v-if="loading" class="loading-state"><div class="spinner-lg"></div></div>
         <div v-else-if="!files.length" class="empty-state">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
           <p>{{ t.noFiles }}</p><span>{{ t.uploadDrop }}</span>
         </div>
-        <div v-else class="file-table">
+
+        <!-- 列表 / 详细信息：表格布局 -->
+        <div v-else-if="viewMode === 'list' || viewMode === 'detail'" class="file-table" :class="'mode-'+viewMode">
           <div class="file-header" :class="{ 'has-check': selectMode }">
             <div v-if="selectMode" class="col-check" @click="toggleSelectAll">
               <div class="checkmark" :class="{ checked: allSelected, indeterminate: selected.length > 0 && !allSelected }">
@@ -271,19 +284,22 @@
               </div>
             </div>
             <span class="col-name">{{ t.name }}</span>
-            <span class="col-size">{{ t.size }}</span>
-            <span class="col-date">{{ t.modified }}</span>
-            <span class="col-perm">{{ t.permissions }}</span>
+            <template v-if="viewMode === 'detail'">
+              <span class="col-size">{{ t.size }}</span>
+              <span class="col-date">{{ t.modified }}</span>
+              <span class="col-type">{{ t.type }}</span>
+              <span class="col-perm">{{ t.permissions }}</span>
+            </template>
           </div>
           <transition-group name="slide-up" tag="div">
             <div
-              v-for="file in files"
+              v-for="file in sortedFiles"
               :key="file.path"
               class="file-row"
               :data-name="file.name"
               :class="{ selected: selected.includes(file.path), 'select-mode': selectMode, 'highlight-row': highlightName === file.name }"
               @click="handleRowClick($event, file)"
-              @contextmenu.prevent="handleRowContextMenu($event, file)"
+              @contextmenu.prevent.stop="handleRowContextMenu($event, file)"
               @touchstart.passive="handleTouchStart($event, file)"
               @touchend.passive="handleTouchEnd"
               @touchmove.passive="handleTouchCancel"
@@ -301,12 +317,43 @@
                 <span class="file-name">{{ file.name }}</span>
                 <span v-if="file.is_public" class="badge-public">{{ t.isPublic }}</span>
               </div>
-              <span class="col-size">{{ file.is_dir ? '—' : formatSize(file.size) }}</span>
-              <span class="col-date">{{ formatDate(file.mod_time) }}</span>
-              <span class="col-perm"><span class="perm-badge">{{ formatMode(file.mode) }}</span></span>
+              <template v-if="viewMode === 'detail'">
+                <span class="col-size">{{ file.is_dir ? '—' : formatSize(file.size) }}</span>
+                <span class="col-date">{{ formatDate(file.mod_time) }}</span>
+                <span class="col-type">{{ typeLabel(file) }}</span>
+                <span class="col-perm"><span class="perm-badge">{{ formatMode(file.mode) }}</span></span>
+              </template>
             </div>
           </transition-group>
         </div>
+
+        <!-- 大图标 / 小图标：网格布局 -->
+        <transition-group v-else name="slide-up" tag="div" class="file-grid" :class="'grid-'+viewMode">
+          <div
+            v-for="file in sortedFiles"
+            :key="file.path"
+            class="file-tile"
+            :data-name="file.name"
+            :class="{ selected: selected.includes(file.path), 'select-mode': selectMode, 'highlight-row': highlightName === file.name }"
+            @click="handleRowClick($event, file)"
+            @contextmenu.prevent.stop="handleRowContextMenu($event, file)"
+            @touchstart.passive="handleTouchStart($event, file)"
+            @touchend.passive="handleTouchEnd"
+            @touchmove.passive="handleTouchCancel"
+          >
+            <div v-if="selectMode" class="tile-check" @click.stop="toggleSelect(file)">
+              <div class="checkmark" :class="{ checked: selected.includes(file.path) }">
+                <svg v-if="selected.includes(file.path)" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+            </div>
+            <div class="tile-icon" :class="file.is_dir ? 'folder-icon' : getExt(file.name)">
+              <svg v-if="file.is_dir" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2h-8l-2-2z"/></svg>
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </div>
+            <span class="tile-name">{{ file.name }}</span>
+            <span v-if="file.is_public" class="badge-public tile-badge">{{ t.isPublic }}</span>
+          </div>
+        </transition-group>
       </div>
     </div>
 
@@ -374,6 +421,117 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
             <span>{{ t.delete }}</span>
           </div>
+        </div>
+      </div>
+
+      <!-- ===== 空白区域右键菜单（查看方式 / 排序方式，仅桌面端） ===== -->
+      <div v-if="blankMenu.show" class="ctx-overlay" @mousedown.self="closeBlankMenu" @contextmenu.prevent>
+        <div class="ctx-menu blank-menu" :style="{ top: blankMenu.y + 'px', left: blankMenu.x + 'px' }">
+          <!-- 一级：常用操作 + 入口 -->
+          <template v-if="blankMenu.panel === 'main'">
+            <div class="ctx-item" @click="enterSelectMode();closeBlankMenu()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+              <span>{{ t.selectMode }}</span>
+            </div>
+            <div class="ctx-item" @click="openFetch();closeBlankMenu()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span>{{ t.fetchFile }}</span>
+            </div>
+            <div class="ctx-item" @click="openSearch();closeBlankMenu()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <span>{{ t.search }}</span>
+            </div>
+            <div class="ctx-item" @click="showUpload=true;stagedFiles=[];uploadDone=false;uploadProgress=[];closeBlankMenu()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span>{{ lang==='zh' ? '上传文件' : 'Upload File' }}</span>
+            </div>
+            <div class="ctx-item" @click="showFolderUpload=true;closeBlankMenu()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+              <span>{{ lang==='zh' ? '上传文件夹' : 'Upload Folder' }}</span>
+            </div>
+            <div class="ctx-item" @click="showMkdir=true;closeBlankMenu()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+              <span>{{ lang==='zh' ? '新建文件夹' : 'New Folder' }}</span>
+            </div>
+            <div class="ctx-item" @click="showCreate=true;closeBlankMenu()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+              <span>{{ lang==='zh' ? '新建文件' : 'New File' }}</span>
+            </div>
+            <div class="ctx-item" @click="openSSH();closeBlankMenu()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="6 8 10 12 6 16"/><line x1="13" y1="16" x2="17" y2="16"/></svg>
+              <span>{{ lang === 'zh' ? '终端' : 'Terminal' }}</span>
+            </div>
+            <div class="ctx-divider"></div>
+            <div class="ctx-item ctx-item-nav" @click="blankMenuGoto('view')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+              <span>{{ t.view }}</span>
+              <svg class="ctx-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+            <div class="ctx-item ctx-item-nav" @click="blankMenuGoto('sort')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M6 12h12M10 18h4"/></svg>
+              <span>{{ t.sortBy }}</span>
+              <svg class="ctx-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+          </template>
+
+          <!-- 二级：查看方式 -->
+          <template v-else-if="blankMenu.panel === 'view'">
+            <div class="ctx-item ctx-item-back" @click="blankMenuGoto('main')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+              <span>{{ t.view }}</span>
+            </div>
+            <div class="ctx-divider"></div>
+            <div class="ctx-item ctx-item-radio" @click="blankMenuPickView('icon-large')">
+              <span class="ctx-radio" :class="{checked: viewMode==='icon-large'}"></span>
+              <span>{{ t.viewIconLarge }}</span>
+            </div>
+            <div class="ctx-item ctx-item-radio" @click="blankMenuPickView('icon-small')">
+              <span class="ctx-radio" :class="{checked: viewMode==='icon-small'}"></span>
+              <span>{{ t.viewIconSmall }}</span>
+            </div>
+            <div class="ctx-item ctx-item-radio" @click="blankMenuPickView('list')">
+              <span class="ctx-radio" :class="{checked: viewMode==='list'}"></span>
+              <span>{{ t.viewList }}</span>
+            </div>
+            <div class="ctx-item ctx-item-radio" @click="blankMenuPickView('detail')">
+              <span class="ctx-radio" :class="{checked: viewMode==='detail'}"></span>
+              <span>{{ t.viewDetail }}</span>
+            </div>
+          </template>
+
+          <!-- 二级：排序方式 -->
+          <template v-else-if="blankMenu.panel === 'sort'">
+            <div class="ctx-item ctx-item-back" @click="blankMenuGoto('main')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+              <span>{{ t.sortBy }}</span>
+            </div>
+            <div class="ctx-divider"></div>
+            <div class="ctx-item ctx-item-radio" @click="blankMenuPickSort('name', sortOrder)">
+              <span class="ctx-radio" :class="{checked: sortBy==='name'}"></span>
+              <span>{{ t.sortName }}</span>
+            </div>
+            <div class="ctx-item ctx-item-radio" @click="blankMenuPickSort('date', sortOrder)">
+              <span class="ctx-radio" :class="{checked: sortBy==='date'}"></span>
+              <span>{{ t.sortDate }}</span>
+            </div>
+            <div class="ctx-item ctx-item-radio" @click="blankMenuPickSort('type', sortOrder)">
+              <span class="ctx-radio" :class="{checked: sortBy==='type'}"></span>
+              <span>{{ t.sortType }}</span>
+            </div>
+            <div class="ctx-item ctx-item-radio" @click="blankMenuPickSort('size', sortOrder)">
+              <span class="ctx-radio" :class="{checked: sortBy==='size'}"></span>
+              <span>{{ t.sortSize }}</span>
+            </div>
+            <div class="ctx-divider"></div>
+            <div class="ctx-item ctx-item-radio" @click="blankMenuPickSort(sortBy, 'asc')">
+              <span class="ctx-radio" :class="{checked: sortOrder==='asc'}"></span>
+              <span>{{ t.sortAsc }}</span>
+            </div>
+            <div class="ctx-item ctx-item-radio" @click="blankMenuPickSort(sortBy, 'desc')">
+              <span class="ctx-radio" :class="{checked: sortOrder==='desc'}"></span>
+              <span>{{ t.sortDesc }}</span>
+            </div>
+          </template>
         </div>
       </div>
 
@@ -456,6 +614,7 @@
       <div v-if="showFolderUpload" class="modal-bg modal-bg-centered" @mousedown="onOverlayMousedown" @mouseup="e=>onOverlayMouseup(e,()=>{showFolderUpload=false})">
         <div class="modal modal-md">
           <h3>{{ t.uploadFolder }}</h3>
+          <input ref="folderInput" type="file" webkitdirectory multiple @change="confirmFolderUpload" style="display:none" />
           <div class="upload-area" @click="$refs.folderInput.click()" @dragover.prevent @drop.prevent="dropFolderStage">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><polyline points="12 11 12 17"/><polyline points="9 14 12 11 15 14"/></svg>
             <p>{{ lang==='zh'?'点击选择文件夹，或将文件夹拖拽到此处':'Click to select folder, or drag & drop a folder here' }}</p>
@@ -996,6 +1155,13 @@ const files = ref([])
 const loading = ref(false)
 const dragging = ref(false)
 
+// ── 查看方式 / 排序方式 ──────────────────────────────
+// viewMode: list | detail | icon-large | icon-small
+const viewMode = ref(localStorage.getItem('fileViewMode') || 'detail')
+// sortBy: name | date | type | size ; sortOrder: asc | desc
+const sortBy = ref(localStorage.getItem('fileSortBy') || 'name')
+const sortOrder = ref(localStorage.getItem('fileSortOrder') || 'asc')
+
 const selectMode = ref(false)
 const selected = ref([])
 
@@ -1044,12 +1210,6 @@ const renameValue = ref('')
 const renameInputRef = ref(null)
 const showSearch = ref(false)
 const showSearchResult = ref(false)
-
-// 下拉菜单
-const showUploadDrop = ref(false)
-const showCreateDrop = ref(false)
-const uploadDropRef = ref(null)
-const createDropRef = ref(null)
 
 // SSH
 const showSSH = ref(false)
@@ -1123,6 +1283,16 @@ const searchUsedDir = ref('')  // 本次实际搜索的目录，结果页展示�
 // 右键菜单
 const ctxMenu = ref({ show:false, x:0, y:0, file:null })
 
+// 空白区域右键菜单（查看方式 / 排序方式）
+// panel: 'main' | 'view' | 'sort'
+const blankMenu = ref({ show:false, x:0, y:0, panel:'main' })
+
+// 移动端查看/排序方式选择弹层（底部弹出）
+// panel: 'view' | 'sort'
+const mobileViewSort = ref({ show:false, panel:'view' })
+function openMobileViewSort(panel) { mobileViewSort.value = { show:true, panel } }
+function closeMobileViewSort() { mobileViewSort.value = { ...mobileViewSort.value, show:false } }
+
 // ── 计算属性 ───────────────────────────────────────
 // 实时展示本次将搜索的目录
 const searchScopeDisplay = computed(() => {
@@ -1141,6 +1311,26 @@ const pathSegments = computed(() => currentPath.value.split('/').filter(Boolean)
 const shareUrl = computed(() => shareResult.value ? `${location.origin}/s/${shareResult.value.code}` : '')
 const rawShareUrl = computed(() => shareResult.value ? `${location.origin}/s/${shareResult.value.code}/raw` : '')
 const allSelected = computed(() => files.value.length > 0 && selected.value.length === files.value.length)
+
+// 按当前查看/排序设置排序后的展示列表（文件夹始终排在前面）
+const sortedFiles = computed(() => {
+  const dir = sortOrder.value === 'desc' ? -1 : 1
+  const cmp = (a, b) => {
+    let r = 0
+    switch (sortBy.value) {
+      case 'date': r = new Date(a.mod_time||0) - new Date(b.mod_time||0); break
+      case 'size': r = (a.size||0) - (b.size||0); break
+      case 'type': r = getExt(a.name).localeCompare(getExt(b.name)) || a.name.localeCompare(b.name); break
+      case 'name':
+      default: r = a.name.localeCompare(b.name)
+    }
+    return r * dir
+  }
+  return [
+    ...files.value.filter(f => f.is_dir).sort(cmp),
+    ...files.value.filter(f => !f.is_dir).sort(cmp),
+  ]
+})
 const selectedCountText = computed(() => (t.value.selectedCount||'{n} 项已选').replace('{n}', selected.value.length))
 const batchDeleteWarningText = computed(() => (t.value.batchDeleteWarning||'将删除 {n} 个项目！').replace('{n}', selected.value.length))
 
@@ -1187,10 +1377,7 @@ async function load() {
     const { data } = await api.get('/files', { params: { path: currentPath.value } })
     let raw = data.files || []
     if (!showHidden.value) raw = raw.filter(f => !f.name.startsWith('.'))
-    files.value = [
-      ...raw.filter(f => f.is_dir).sort((a,b) => a.name.localeCompare(b.name)),
-      ...raw.filter(f => !f.is_dir).sort((a,b) => a.name.localeCompare(b.name)),
-    ]
+    files.value = raw
   } catch(e) {
     showToast(e.response?.data?.error || (lang.value === 'zh' ? '加载失败，请检查网络或路径' : 'Load failed, check network or path'))
   }
@@ -1267,6 +1454,31 @@ function openCtxMenuAt(clientX, clientY, file) {
     }
   })
 }
+
+// ── 空白区域右键菜单（查看方式 / 排序方式）──────────
+function closeBlankMenu() { blankMenu.value = { show:false, x:0, y:0, panel:'main' } }
+function handleBlankContextMenu(e) {
+  if (selectMode.value) return
+  const menuW = 220
+  let x = e.clientX
+  let y = e.clientY
+  if (x + menuW > window.innerWidth) x = window.innerWidth - menuW - 8
+  if (y < 8) y = 8
+  blankMenu.value = { show:true, x, y, panel:'main' }
+  nextTick(() => {
+    const el = document.querySelector('.blank-menu')
+    if (!el) return
+    const menuH = el.offsetHeight
+    if (y + menuH > window.innerHeight - 8) {
+      y = window.innerHeight - menuH - 8
+      if (y < 8) y = 8
+      blankMenu.value = { ...blankMenu.value, y }
+    }
+  })
+}
+function blankMenuGoto(panel) { blankMenu.value = { ...blankMenu.value, panel } }
+function blankMenuPickView(mode) { setViewMode(mode); closeBlankMenu() }
+function blankMenuPickSort(by, order) { setSort(by, order); closeBlankMenu() }
 
 // 移动端长按：文件/文件夹均长按弹出操作菜单（固定位置，居中底部）
 let longPressTimer = null
@@ -1569,6 +1781,12 @@ function getExt(name) {
   if (['md','txt','log','ini','conf','yaml','yml','toml','json','sh','bash'].includes(ext)) return 'text'
   if (['js','ts','py','go','java','rs','c','cpp','h'].includes(ext)) return 'code'
   return 'default'
+}
+// 详细信息模式的「类型」列：文件夹 / 大写扩展名 + 文件 / 文件
+function typeLabel(file) {
+  if (file.is_dir) return t.value.folder
+  const ext = file.name.includes('.') ? file.name.split('.').pop().toUpperCase() : ''
+  return ext ? `${ext} ${t.value.file}` : t.value.file
 }
 function formatSize(bytes) {
   if (!bytes) return '0 B'
@@ -1909,7 +2127,7 @@ async function handleDrop(e) {
 }
 
 // 键盘 Esc 关闭右键菜单
-function onKeydown(e) { if (e.key === 'Escape') closeCtxMenu() }
+function onKeydown(e) { if (e.key === 'Escape') { closeCtxMenu(); closeBlankMenu() } }
 
 // Toast
 const toastMsg = ref('')
@@ -1920,24 +2138,56 @@ function showToast(msg) {
   toastTimer = setTimeout(() => { toastMsg.value = '' }, 2500)
 }
 function onShowHiddenChanged(e) { showHidden.value = e.detail; load() }
+
+// ── 查看方式 / 排序方式：设置、持久化（localStorage 即时 + 后端跨设备同步）──
+async function loadViewSortSettings() {
+  try {
+    const { data } = await api.get('/settings')
+    if (data.file_view_mode) {
+      viewMode.value = data.file_view_mode
+      localStorage.setItem('fileViewMode', data.file_view_mode)
+    }
+    if (data.file_sort_by) {
+      sortBy.value = data.file_sort_by
+      localStorage.setItem('fileSortBy', data.file_sort_by)
+    }
+    if (data.file_sort_order) {
+      sortOrder.value = data.file_sort_order
+      localStorage.setItem('fileSortOrder', data.file_sort_order)
+    }
+  } catch {}
+}
+function setViewMode(mode) {
+  viewMode.value = mode
+  localStorage.setItem('fileViewMode', mode)
+  window.dispatchEvent(new CustomEvent('file-view-mode-changed', { detail: mode }))
+  api.put('/settings', { file_view_mode: mode }).catch(() => {})
+}
+function setSort(by, order) {
+  sortBy.value = by
+  sortOrder.value = order
+  localStorage.setItem('fileSortBy', by)
+  localStorage.setItem('fileSortOrder', order)
+  window.dispatchEvent(new CustomEvent('file-sort-changed', { detail: { by, order } }))
+  api.put('/settings', { file_sort_by: by, file_sort_order: order }).catch(() => {})
+}
+function onFileViewModeChanged(e) { viewMode.value = e.detail }
+function onFileSortChanged(e) { sortBy.value = e.detail.by; sortOrder.value = e.detail.order }
+
 onMounted(() => {
-  load(); loadWebDAVStatus()
+  load(); loadWebDAVStatus(); loadViewSortSettings()
   document.addEventListener('keydown', onKeydown)
   window.addEventListener('show-hidden-changed', onShowHiddenChanged)
-  document.addEventListener('click', onDocClick)
+  window.addEventListener('file-view-mode-changed', onFileViewModeChanged)
+  window.addEventListener('file-sort-changed', onFileSortChanged)
 })
 onUnmounted(() => {
   document.removeEventListener('keydown', onKeydown)
   window.removeEventListener('show-hidden-changed', onShowHiddenChanged)
-  document.removeEventListener('click', onDocClick)
+  window.removeEventListener('file-view-mode-changed', onFileViewModeChanged)
+  window.removeEventListener('file-sort-changed', onFileSortChanged)
   closeSSH()
 })
-
-// 点击页面其他区域关闭下拉
-function onDocClick(e) {
-  if (uploadDropRef.value && !uploadDropRef.value.contains(e.target)) showUploadDrop.value = false
-  if (createDropRef.value && !createDropRef.value.contains(e.target)) showCreateDrop.value = false
-}
 
 // ── 终端 (WebSocket PTY) ──────────────────────────────────────────────────────
 
@@ -2243,12 +2493,21 @@ watch(() => _route.params.pathMatch, (val) => {
 .spinner-sm { width:18px; height:18px; border:2px solid var(--gray-200); border-top-color:var(--blue-500); border-radius:50%; animation:spin .8s linear infinite; }
 @keyframes spin { to{transform:rotate(360deg)} }
 .file-table { background:white; border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); overflow:hidden; border:1px solid var(--gray-100); }
-.file-header { display:grid; grid-template-columns:1fr 90px 160px 60px; padding:11px 28px; background:var(--gray-50); border-bottom:1px solid var(--gray-100); font-size:12px; font-weight:600; color:var(--gray-400); text-transform:uppercase; letter-spacing:.5px; align-items:center; }
-.file-header.has-check { grid-template-columns:44px 1fr 90px 160px 60px; cursor:pointer; }
-.file-row { display:grid; grid-template-columns:1fr 90px 160px 60px; padding:13px 28px; border-bottom:1px solid var(--gray-50); cursor:pointer; transition:var(--transition); align-items:center; }
+/* 详细信息模式：图标+名称 / 大小 / 修改时间 / 类型 / 权限 */
+.file-table.mode-detail .file-header,
+.file-table.mode-detail .file-row { grid-template-columns:1fr 90px 160px 110px 60px; }
+.file-table.mode-detail .file-header.has-check,
+.file-table.mode-detail .file-row.select-mode { grid-template-columns:44px 1fr 90px 160px 110px 60px; }
+/* 列表模式：仅图标+名称 */
+.file-table.mode-list .file-header,
+.file-table.mode-list .file-row { grid-template-columns:1fr; }
+.file-table.mode-list .file-header.has-check,
+.file-table.mode-list .file-row.select-mode { grid-template-columns:44px 1fr; }
+.file-header { display:grid; padding:11px 28px; background:var(--gray-50); border-bottom:1px solid var(--gray-100); font-size:12px; font-weight:600; color:var(--gray-400); text-transform:uppercase; letter-spacing:.5px; align-items:center; }
+.file-header.has-check { cursor:pointer; }
+.file-row { display:grid; padding:13px 28px; border-bottom:1px solid var(--gray-50); cursor:pointer; transition:var(--transition); align-items:center; }
 .file-row:last-child { border-bottom:none; }
 .file-row:hover { background:var(--blue-50); }
-.file-row.select-mode { grid-template-columns:44px 1fr 90px 160px 60px; }
 .file-row.selected { background:rgba(37,99,235,.06); }
 .file-row.selected:hover { background:rgba(37,99,235,.1); }
 .file-row.highlight-row { background: var(--blue-50); transition: background 0.5s; }
@@ -2271,9 +2530,39 @@ watch(() => _route.params.pathMatch, (val) => {
 .file-name { font-size:15px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--gray-700); }
 .badge-public { padding:2px 8px; background:rgba(16,185,129,.12); color:#10B981; border-radius:20px; font-size:11px; font-weight:600; flex-shrink:0; }
 .file-row:hover .file-name { color:var(--blue-600); }
-.col-size,.col-date { font-size:13px; color:var(--gray-400); }
+.col-size,.col-date,.col-type { font-size:13px; color:var(--gray-400); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .col-perm { font-size:12px; }
 .perm-badge { font-family:'JetBrains Mono',monospace; font-size:12px; padding:2px 8px; background:var(--gray-100); color:var(--gray-500); border-radius:6px; }
+
+/* ===== 大图标 / 小图标：网格视图 ===== */
+.file-grid { display:grid; gap:18px; padding:6px 2px; }
+.file-grid.grid-icon-large { grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); }
+.file-grid.grid-icon-small { grid-template-columns:repeat(auto-fill, minmax(84px, 1fr)); gap:10px; }
+.file-tile { position:relative; display:flex; flex-direction:column; align-items:center; gap:8px; padding:14px 8px 10px; border-radius:var(--radius-md); cursor:pointer; transition:var(--transition); text-align:center; }
+.file-tile:hover { background:var(--blue-50); }
+.file-tile.selected { background:rgba(37,99,235,.08); }
+.file-tile.selected:hover { background:rgba(37,99,235,.12); }
+.file-tile.highlight-row { background:var(--blue-50); transition:background .5s; }
+.file-tile.select-mode { padding-top:28px; }
+.tile-check { position:absolute; top:6px; left:6px; }
+.grid-icon-large .tile-icon { width:64px; height:64px; border-radius:16px; }
+.grid-icon-large .tile-icon svg { width:30px; height:30px; }
+.grid-icon-small .tile-icon { width:40px; height:40px; border-radius:11px; }
+.grid-icon-small .tile-icon svg { width:20px; height:20px; }
+.tile-icon { display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.tile-icon.folder-icon { background:rgba(251,191,36,.15); color:#F59E0B; }
+.tile-icon.img { background:rgba(16,185,129,.12); color:#10B981; }
+.tile-icon.video { background:rgba(139,92,246,.12); color:#8B5CF6; }
+.tile-icon.audio { background:rgba(244,63,94,.12); color:#F43F5E; }
+.tile-icon.archive { background:rgba(245,158,11,.12); color:#F59E0B; }
+.tile-icon.pdf { background:rgba(239,68,68,.12); color:#EF4444; }
+.tile-icon.code,.tile-icon.text { background:rgba(59,130,246,.12); color:#3B82F6; }
+.tile-icon.default { background:var(--gray-100); color:var(--gray-400); }
+.tile-name { font-size:13px; font-weight:500; color:var(--gray-700); word-break:break-word; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; line-height:1.35; }
+.grid-icon-small .tile-name { font-size:12px; -webkit-line-clamp:1; }
+.file-tile:hover .tile-name { color:var(--blue-600); }
+.tile-badge { font-size:10px; padding:1px 6px; }
+
 
 /* 文件信息弹窗 */
 .info-modal { padding: 0 !important; overflow: hidden; display:flex; flex-direction:column; }
@@ -2347,6 +2636,19 @@ watch(() => _route.params.pathMatch, (val) => {
 .ctx-item-danger:hover { background:rgba(239,68,68,.08); color:#dc2626; }
 .ctx-item-danger:hover svg { color:#EF4444; }
 .ctx-divider { height:1px; background:var(--gray-100); margin:4px 0; }
+
+/* 空白区域右键菜单：一级/二级面板 */
+.blank-menu { min-width:210px; }
+.ctx-item-nav { justify-content:space-between; }
+.ctx-item-nav span { flex:1; }
+.ctx-chevron { width:14px !important; height:14px !important; margin-left:auto; }
+.ctx-item-back { font-weight:600; color:var(--gray-800); }
+.ctx-item-back:hover { background:var(--gray-50); color:var(--gray-900); }
+.ctx-item-back svg { color:var(--gray-500); }
+.ctx-item-radio { padding-left:10px; }
+.ctx-radio { width:15px; height:15px; border-radius:50%; border:2px solid var(--gray-300); flex-shrink:0; position:relative; transition:all .15s; }
+.ctx-radio.checked { border-color:var(--blue-600); }
+.ctx-radio.checked::after { content:''; position:absolute; inset:2px; border-radius:50%; background:var(--blue-600); }
 
 /* 弹窗通用 */
 .modal-bg { position:fixed; inset:0; background:rgba(15,23,42,.45); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; z-index:100; }
@@ -2500,15 +2802,21 @@ watch(() => _route.params.pathMatch, (val) => {
   /* 隐藏桌面端头部 */
   .page-header { display:none; }
 
-  /* 移动端隐藏权限列和日期列，只保留名称+大小 */
-  .file-header { grid-template-columns:1fr 64px !important; }
-  .file-row    { grid-template-columns:1fr 64px !important; }
-  .file-row.select-mode { grid-template-columns:44px 1fr !important; }
-  .file-header.has-check { grid-template-columns:44px 1fr !important; }
-  .col-date, .col-perm { display:none !important; }
-  /* 选择模式下 size 也隐藏，行只有 checkbox + 名称 */
-  .file-row.select-mode .col-size { display:none !important; }
-  .file-header.has-check .col-size { display:none !important; }
+  /* 移动端「详细信息」：图标+名称+大小+权限（不显示修改时间） */
+  .file-table.mode-detail .file-header,
+  .file-table.mode-detail .file-row { grid-template-columns:1fr 64px 60px !important; }
+  .file-table.mode-detail .file-header.has-check,
+  .file-table.mode-detail .file-row.select-mode { grid-template-columns:44px 1fr 64px 60px !important; }
+  .file-table.mode-detail .col-date, .file-table.mode-detail .col-type { display:none !important; }
+  /* 移动端「列表」：仅图标+名称 */
+  .file-table.mode-list .file-header,
+  .file-table.mode-list .file-row { grid-template-columns:1fr !important; }
+  .file-table.mode-list .file-header.has-check,
+  .file-table.mode-list .file-row.select-mode { grid-template-columns:44px 1fr !important; }
+
+  /* 移动端图标网格：缩小最小格宽 */
+  .file-grid.grid-icon-large { grid-template-columns:repeat(auto-fill, minmax(92px, 1fr)); gap:14px; }
+  .file-grid.grid-icon-small { grid-template-columns:repeat(auto-fill, minmax(72px, 1fr)); gap:8px; }
 
   /* 移动端顶部栏 */
   .mobile-header {
@@ -2663,16 +2971,16 @@ watch(() => _route.params.pathMatch, (val) => {
     padding:12px 18px 8px;
     font-size:13px; font-weight:600; color:var(--blue-700);
   }
+  .mob-act-sheet-title {
+    padding:14px 18px 6px;
+    font-size:13px; font-weight:700; color:var(--gray-800);
+  }
+  .mob-act-radio { gap:12px; }
+  .mob-act-radio .ctx-radio { width:17px; height:17px; }
+  .mob-viewsort-menu { min-width:220px; }
 
-  /* 文件表格 */
-  .file-header { grid-template-columns:1fr 70px 44px !important; padding:8px 12px; }
-  .file-row { grid-template-columns:1fr 70px 44px !important; padding:13px 14px; }
-  .file-header > *:nth-child(3),
-  .file-row > *:nth-child(3) { display:none; }
+  /* 文件表格：详细信息/列表模式的列宽已在上方按 mode 区分定义，此处不再重复覆盖 */
   .file-name { font-size:15px; }
-  .file-size { font-size:12px; }
-  .row-actions .act-btn:not(.act-more) { display:none; }
-  .row-actions { justify-content:flex-end; }
 
   /* ── 移动端弹窗：全部居中，按层级适配 ── */
 
@@ -2741,14 +3049,16 @@ watch(() => _route.params.pathMatch, (val) => {
 }
 
 @media (max-width: 480px) {
-  /* 普通模式：只显示名称列 */
-  .file-header { grid-template-columns:1fr !important; }
-  .file-row { grid-template-columns:1fr !important; }
-  /* 隐藏 size、date、perm 列 */
-  .col-size, .col-date, .col-perm { display:none !important; }
-  /* 选择模式：checkbox + 名称 */
-  .file-row.select-mode { grid-template-columns:44px 1fr !important; }
-  .file-header.has-check { grid-template-columns:44px 1fr !important; }
+  /* 「列表」模式：仅名称列（极小屏） */
+  .file-table.mode-list .file-header { grid-template-columns:1fr !important; }
+  .file-table.mode-list .file-row { grid-template-columns:1fr !important; }
+  .file-table.mode-list .file-row.select-mode { grid-template-columns:44px 1fr !important; }
+  .file-table.mode-list .file-header.has-check { grid-template-columns:44px 1fr !important; }
+  /* 「详细信息」模式：极小屏进一步收窄大小/权限列宽度，但仍保留显示 */
+  .file-table.mode-detail .file-header,
+  .file-table.mode-detail .file-row { grid-template-columns:1fr 52px 50px !important; }
+  .file-table.mode-detail .file-header.has-check,
+  .file-table.mode-detail .file-row.select-mode { grid-template-columns:36px 1fr 52px 50px !important; }
   .file-icon { width:32px; height:32px; border-radius:7px; }
   .file-icon svg { width:15px; height:15px; }
   .mob-crumb-item { max-width:80px; }

@@ -267,6 +267,9 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 		EditorFont         string `json:"editor_font"`
 		ShowHidden         *bool  `json:"show_hidden"`
 		GithubProxyEnabled *bool  `json:"github_proxy_enabled"`
+		FileViewMode       string `json:"file_view_mode"`
+		FileSortBy         string `json:"file_sort_by"`
+		FileSortOrder      string `json:"file_sort_order"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
@@ -307,6 +310,17 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 	}
 	if req.GithubProxyEnabled != nil {
 		s.GithubProxyEnabled = *req.GithubProxyEnabled
+	}
+	validViewModes := map[string]bool{"list": true, "detail": true, "icon-large": true, "icon-small": true}
+	if req.FileViewMode != "" && validViewModes[req.FileViewMode] {
+		s.FileViewMode = req.FileViewMode
+	}
+	validSortBy := map[string]bool{"name": true, "date": true, "type": true, "size": true}
+	if req.FileSortBy != "" && validSortBy[req.FileSortBy] {
+		s.FileSortBy = req.FileSortBy
+	}
+	if req.FileSortOrder == "asc" || req.FileSortOrder == "desc" {
+		s.FileSortOrder = req.FileSortOrder
 	}
 	h.db.Save(&s)
 	c.JSON(200, s)
