@@ -392,7 +392,7 @@
 
         <!-- 列表 / 详细信息：表格布局 -->
         <div v-else-if="viewMode === 'list' || viewMode === 'detail'" class="file-table" :class="'mode-'+viewMode">
-          <div class="file-header" :class="{ 'has-check': selectMode }">
+          <div v-if="viewMode === 'detail'" class="file-header" :class="{ 'has-check': selectMode }">
             <div v-if="selectMode" class="col-check" @click="toggleSelectAll">
               <div class="checkmark" :class="{ checked: allSelected, indeterminate: selected.length > 0 && !allSelected }">
                 <svg v-if="allSelected" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -400,14 +400,12 @@
               </div>
             </div>
             <span class="col-name">{{ t.name }}</span>
-            <template v-if="viewMode === 'detail'">
-              <span class="col-size">{{ t.size }}</span>
-              <span class="col-date">{{ t.modified }}</span>
-              <span class="col-type">{{ t.type }}</span>
-              <span class="col-perm">{{ t.permissions }}</span>
-            </template>
+            <span class="col-size">{{ t.size }}</span>
+            <span class="col-date">{{ t.modified }}</span>
+            <span class="col-type">{{ t.type }}</span>
+            <span class="col-perm">{{ t.permissions }}</span>
           </div>
-          <transition-group name="slide-up" tag="div">
+          <transition-group name="slide-up" tag="div" class="file-table-body">
             <div
               v-for="file in sortedFiles"
               :key="file.path"
@@ -2491,16 +2489,17 @@ watch(() => _route.params.pathMatch, (val) => {
 .spinner-sm { width:18px; height:18px; border:2px solid var(--gray-200); border-top-color:var(--blue-500); border-radius:50%; animation:spin .8s linear infinite; }
 @keyframes spin { to{transform:rotate(360deg)} }
 .file-table { background:white; border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); overflow:hidden; border:1px solid var(--gray-100); }
-/* 详细信息模式：图标+名称 / 大小 / 修改时间 / 类型 / 权限 */
+/* 详细信息模式：图标+名称 / 大小 / 修改时间 / 类型 / 权限（单列表格） */
 .file-table.mode-detail .file-header,
 .file-table.mode-detail .file-row { grid-template-columns:1fr 90px 160px 110px 60px; }
 .file-table.mode-detail .file-header.has-check,
 .file-table.mode-detail .file-row.select-mode { grid-template-columns:44px 1fr 90px 160px 110px 60px; }
-/* 列表模式：仅图标+名称 */
-.file-table.mode-list .file-header,
-.file-table.mode-list .file-row { grid-template-columns:1fr; }
-.file-table.mode-list .file-header.has-check,
-.file-table.mode-list .file-row.select-mode { grid-template-columns:44px 1fr; }
+/* 列表模式：仅图标+名称，多列网格布局（桌面端 4 列） */
+.file-table.mode-list { border-radius:var(--radius-lg); }
+.file-table.mode-list .file-table-body { display:grid; grid-template-columns:repeat(4, 1fr); }
+.file-table.mode-list .file-row { grid-template-columns:1fr !important; padding:12px 14px; border-bottom:1px solid var(--gray-50); border-right:1px solid var(--gray-50); }
+.file-table.mode-list .file-row:nth-child(4n) { border-right:none; }
+.file-table.mode-list .file-row.select-mode { grid-template-columns:28px 1fr !important; }
 .file-header { display:grid; padding:11px 28px; background:var(--gray-50); border-bottom:1px solid var(--gray-100); font-size:12px; font-weight:600; color:var(--gray-400); text-transform:uppercase; letter-spacing:.5px; align-items:center; }
 .file-header.has-check { cursor:pointer; }
 .file-row { display:grid; padding:13px 28px; border-bottom:1px solid var(--gray-50); cursor:pointer; transition:var(--transition); align-items:center; }
@@ -2805,11 +2804,12 @@ watch(() => _route.params.pathMatch, (val) => {
   .file-table.mode-detail .file-header.has-check,
   .file-table.mode-detail .file-row.select-mode { grid-template-columns:44px 1fr 64px 60px !important; }
   .file-table.mode-detail .col-date, .file-table.mode-detail .col-type { display:none !important; }
-  /* 移动端「列表」：仅图标+名称 */
-  .file-table.mode-list .file-header,
-  .file-table.mode-list .file-row { grid-template-columns:1fr !important; }
-  .file-table.mode-list .file-header.has-check,
-  .file-table.mode-list .file-row.select-mode { grid-template-columns:44px 1fr !important; }
+  /* 移动端「列表」：仅图标+名称，2 列网格 */
+  .file-table.mode-list .file-table-body { grid-template-columns:repeat(2, 1fr) !important; }
+  .file-table.mode-list .file-row { grid-template-columns:1fr !important; padding:11px 12px; }
+  .file-table.mode-list .file-row.select-mode { grid-template-columns:26px 1fr !important; }
+  .file-table.mode-list .file-row:nth-child(4n) { border-right:1px solid var(--gray-50); }
+  .file-table.mode-list .file-row:nth-child(2n) { border-right:none; }
 
   /* 移动端图标网格：缩小最小格宽 */
   .file-grid.grid-icon-large { grid-template-columns:repeat(auto-fill, minmax(92px, 1fr)); gap:14px; }
@@ -3046,11 +3046,10 @@ watch(() => _route.params.pathMatch, (val) => {
 }
 
 @media (max-width: 480px) {
-  /* 「列表」模式：仅名称列（极小屏） */
-  .file-table.mode-list .file-header { grid-template-columns:1fr !important; }
-  .file-table.mode-list .file-row { grid-template-columns:1fr !important; }
-  .file-table.mode-list .file-row.select-mode { grid-template-columns:44px 1fr !important; }
-  .file-table.mode-list .file-header.has-check { grid-template-columns:44px 1fr !important; }
+  /* 「列表」模式：极小屏仍保持 2 列网格 */
+  .file-table.mode-list .file-table-body { grid-template-columns:repeat(2, 1fr) !important; }
+  .file-table.mode-list .file-row { grid-template-columns:1fr !important; padding:10px 10px; }
+  .file-table.mode-list .file-row.select-mode { grid-template-columns:24px 1fr !important; }
   /* 「详细信息」模式：极小屏进一步收窄大小/权限列宽度，但仍保留显示 */
   .file-table.mode-detail .file-header,
   .file-table.mode-detail .file-row { grid-template-columns:1fr 52px 50px !important; }
