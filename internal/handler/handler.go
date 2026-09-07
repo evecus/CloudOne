@@ -55,13 +55,11 @@ func New(db *auth.DB, fm *files.Manager, sm *files.ShareManager) *Handler {
 // ── 认证 ──────────────────────────────────────────────────────────────────────
 
 func (h *Handler) AuthStatus(c *gin.Context) {
-	var count int64
 	count, _ := h.db.CountUsers()
 	c.JSON(200, gin.H{"setup": count > 0})
 }
 
 func (h *Handler) Setup(c *gin.Context) {
-	var count int64
 	count, _ := h.db.CountUsers()
 	if count > 0 {
 		c.JSON(400, gin.H{"error": "already setup"})
@@ -1813,7 +1811,6 @@ func (h *Handler) WebDAVMiddleware() gin.HandlerFunc {
 		// 校验用户名
 		expectedUser := s.WebDAVUsername
 		if expectedUser == "" {
-			var user auth.User
 			if firstUser, ferr := h.db.GetFirstUser(); ferr == nil {
 				expectedUser = firstUser.Username
 			}
@@ -1833,7 +1830,6 @@ func (h *Handler) WebDAVMiddleware() gin.HandlerFunc {
 			}
 		} else {
 			// 未设置独立密码：回落到 CloudOne 账户密码
-			var user auth.User
 			davUser, davUserErr := h.db.GetUserByUsername(username)
 			if davUserErr != nil {
 				c.Header("WWW-Authenticate", `Basic realm="CloudOne WebDAV"`)
