@@ -21,14 +21,13 @@ import (
 	"time"
 
 	"github.com/cloudone/cloudone/internal/auth"
-	"github.com/cloudone/cloudone/internal/config"
 	"github.com/cloudone/cloudone/internal/files"
 	"github.com/cloudone/cloudone/internal/terminal"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
+
 )
 
 var jwtSecret []byte
@@ -36,45 +35,34 @@ var jwtSecret []byte
 func SetJWTSecret(secret string) { jwtSecret = []byte(secret) }
 
 type Handler struct {
-	db           *gorm.DB
+	db           *auth.DB
 	files        *files.Manager
 	shares       *files.ShareManager
-	confPath     string
 	loginLimiter  *rateLimiter
 	webdavLimiter *rateLimiter
 }
 
-func New(db *gorm.DB, fm *files.Manager, sm *files.ShareManager, confPath string) *Handler {
+func New(db *auth.DB, fm *files.Manager, sm *files.ShareManager) *Handler {
 	return &Handler{
 		db:            db,
 		files:         fm,
 		shares:        sm,
-		confPath:      confPath,
 		loginLimiter:  newRateLimiter(5, time.Minute),  // 每 IP 每分钟最多 5 次登录
 		webdavLimiter: newRateLimiter(10, time.Minute), // 每 IP 每分钟最多 10 次 WebDAV 认证
 	}
-}
-
-// syncConf 只保存 host/port 到 conf.ini，其余数据全在 DB
-func (h *Handler) syncConf() {
-	cfg, err := config.Load(h.confPath)
-	if err != nil {
-		return
-	}
-	_ = config.Save(h.confPath, cfg)
 }
 
 // ── 认证 ──────────────────────────────────────────────────────────────────────
 
 func (h *Handler) AuthStatus(c *gin.Context) {
 	var count int64
-	h.db.Model(&auth.User{}).Count(&count)
+	count, _ := h.db.CountUsers()
 	c.JSON(200, gin.H{"setup": count > 0})
 }
 
 func (h *Handler) Setup(c *gin.Context) {
 	var count int64
-	h.db.Model(&auth.User{}).Count(&count)
+	count, _ := h.db.CountUsers()
 	if count > 0 {
 		c.JSON(400, gin.H{"error": "already setup"})
 		return
@@ -93,7 +81,7 @@ func (h *Handler) Setup(c *gin.Context) {
 		return
 	}
 	user := auth.User{Username: req.Username, Password: string(hash)}
-	if err := h.db.Create(&user).Error; err != nil {
+	if err := h.db.CreateUser(&user); err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
@@ -121,10 +109,12 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 	var user auth.User
-	if h.db.Where("username = ?", req.Username).First(&user).Error != nil {
+	userPtr, userErr := h.db.GetUserByUsername(req.Username)
+	if userErr != nil {
 		c.JSON(401, gin.H{"error": "invalid credentials"})
 		return
 	}
+	user = *userPtr
 	if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)) != nil {
 		c.JSON(401, gin.H{"error": "invalid credentials"})
 		return
@@ -189,11 +179,13 @@ func (h *Handler) AuthMiddleware() gin.HandlerFunc {
 		tokenVersion := int(claims["version"].(float64))
 
 		var user auth.User
-		if h.db.First(&user, userID).Error != nil {
+		userPtr, userLookupErr := h.db.GetUserByID(userID)
+		if userLookupErr != nil {
 			c.JSON(401, gin.H{"error": "user not found"})
 			c.Abort()
 			return
 		}
+		user = *userPtr
 		// 校验 token 版本，密码修改后旧 token 立即失效
 		if user.TokenVersion != tokenVersion {
 			c.JSON(401, gin.H{"error": "token has been revoked, please login again"})
@@ -235,7 +227,7 @@ func (h *Handler) UpdateUser(c *gin.Context) {
 		u.TokenVersion++ // 密码修改：旧 token 立即全部失效
 		passwordChanged = true
 	}
-	h.db.Save(&u)
+	_ = h.db.SaveUser(&u)
 
 	resp := gin.H{"user": safeUser(u)}
 	// 密码改了，下发新 token（当前 session 继续有效）
@@ -251,14 +243,20 @@ func (h *Handler) UpdateUser(c *gin.Context) {
 // ── Settings ──────────────────────────────────────────────────────────────────
 
 func (h *Handler) GetSettings(c *gin.Context) {
+	sPtr, _ := h.db.GetSettings()
 	var s auth.Settings
-	h.db.First(&s)
+	if sPtr != nil {
+		s = *sPtr
+	}
 	c.JSON(200, s) // json:"-" 字段自动过滤，敏感字段不暴露
 }
 
 func (h *Handler) UpdateSettings(c *gin.Context) {
+	sPtr2, _ := h.db.GetSettings()
 	var s auth.Settings
-	h.db.First(&s)
+	if sPtr2 != nil {
+		s = *sPtr2
+	}
 	var req struct {
 		StorageDir         string `json:"storage_dir"`
 		Lang               string `json:"lang"`
@@ -322,15 +320,18 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 	if req.FileSortOrder == "asc" || req.FileSortOrder == "desc" {
 		s.FileSortOrder = req.FileSortOrder
 	}
-	h.db.Save(&s)
+	_ = h.db.SaveSettings(&s)
 	c.JSON(200, s)
 }
 
 // ── WebDAV Settings ───────────────────────────────────────────────────────────
 
 func (h *Handler) GetWebDAVSettings(c *gin.Context) {
+	sDav, _ := h.db.GetSettings()
 	var s auth.Settings
-	h.db.First(&s)
+	if sDav != nil {
+		s = *sDav
+	}
 	// 密码字段只返回"是否已设置"，不返回任何密码内容
 	c.JSON(200, gin.H{
 		"webdav_enabled":      s.WebDAVEnabled,
@@ -341,8 +342,11 @@ func (h *Handler) GetWebDAVSettings(c *gin.Context) {
 }
 
 func (h *Handler) UpdateWebDAVSettings(c *gin.Context) {
+	sDavUpd, _ := h.db.GetSettings()
 	var s auth.Settings
-	h.db.First(&s)
+	if sDavUpd != nil {
+		s = *sDavUpd
+	}
 	var req struct {
 		Enabled  bool   `json:"webdav_enabled"`
 		SubPath  string `json:"webdav_sub_path"`
@@ -368,7 +372,7 @@ func (h *Handler) UpdateWebDAVSettings(c *gin.Context) {
 			return
 		}
 	}
-	h.db.Save(&s)
+	_ = h.db.SaveSettings(&s)
 	c.JSON(200, gin.H{
 		"webdav_enabled":      s.WebDAVEnabled,
 		"webdav_sub_path":     s.WebDAVSubPath,
@@ -1547,8 +1551,11 @@ func (h *Handler) FetchURL(c *gin.Context) {
 	// 探测所有代理站点并按延迟从低到高排序，依次尝试，
 	// 优先用最快的，失败则换下一个，直到全部失败才报错；
 	// 不再尝试直连。关闭（默认）时始终直连，完全不使用代理。
+	sFetch, _ := h.db.GetSettings()
 	var s auth.Settings
-	h.db.First(&s)
+	if sFetch != nil {
+		s = *sFetch
+	}
 
 	urlsToTry := []string{req.URL}
 	if s.GithubProxyEnabled && isGithubURL(req.URL) {
@@ -1763,8 +1770,11 @@ func (h *Handler) GetWebDAVSettings2(c *gin.Context) {
 }
 
 func (h *Handler) webdavRoot() string {
+	sRoot, _ := h.db.GetSettings()
 	var s auth.Settings
-	h.db.First(&s)
+	if sRoot != nil {
+		s = *sRoot
+	}
 	base := h.files.Root()
 	sub := strings.TrimSpace(s.WebDAVSubPath)
 	if sub == "" {
@@ -1778,8 +1788,11 @@ func (h *Handler) webdavRoot() string {
 
 func (h *Handler) WebDAVMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		sMw, _ := h.db.GetSettings()
 		var s auth.Settings
-		h.db.First(&s)
+		if sMw != nil {
+			s = *sMw
+		}
 		if !s.WebDAVEnabled {
 			c.Header("WWW-Authenticate", `Basic realm="CloudOne WebDAV"`)
 			c.AbortWithStatus(503)
@@ -1801,8 +1814,8 @@ func (h *Handler) WebDAVMiddleware() gin.HandlerFunc {
 		expectedUser := s.WebDAVUsername
 		if expectedUser == "" {
 			var user auth.User
-			if h.db.First(&user).Error == nil {
-				expectedUser = user.Username
+			if firstUser, ferr := h.db.GetFirstUser(); ferr == nil {
+				expectedUser = firstUser.Username
 			}
 		}
 		if username != expectedUser {
@@ -1821,12 +1834,13 @@ func (h *Handler) WebDAVMiddleware() gin.HandlerFunc {
 		} else {
 			// 未设置独立密码：回落到 CloudOne 账户密码
 			var user auth.User
-			if h.db.Where("username = ?", username).First(&user).Error != nil {
+			davUser, davUserErr := h.db.GetUserByUsername(username)
+			if davUserErr != nil {
 				c.Header("WWW-Authenticate", `Basic realm="CloudOne WebDAV"`)
 				c.AbortWithStatus(401)
 				return
 			}
-			if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)) != nil {
+			if bcrypt.CompareHashAndPassword([]byte(davUser.Password), []byte(password)) != nil {
 				c.Header("WWW-Authenticate", `Basic realm="CloudOne WebDAV"`)
 				c.AbortWithStatus(401)
 				return
@@ -1837,8 +1851,11 @@ func (h *Handler) WebDAVMiddleware() gin.HandlerFunc {
 }
 
 func (h *Handler) WebDAVHandler(c *gin.Context) {
+	sDav2, _ := h.db.GetSettings()
 	var s auth.Settings
-	h.db.First(&s)
+	if sDav2 != nil {
+		s = *sDav2
+	}
 	if !s.WebDAVEnabled {
 		c.Status(503)
 		return
