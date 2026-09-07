@@ -15,7 +15,6 @@ import (
 	"runtime/debug"
 
 	"github.com/cloudone/cloudone/internal/auth"
-	"github.com/cloudone/cloudone/internal/config"
 	"github.com/cloudone/cloudone/internal/files"
 	"github.com/cloudone/cloudone/internal/handler"
 	"github.com/gin-contrib/cors"
@@ -68,23 +67,27 @@ func main() {
 	}
 
 	// ── 命令行参数解析 ────────────────────────────────────────────────────────
-	var configFlag string
-	var dirFlag string
-	flag.StringVar(&configFlag, "config", "", "数据配置目录 (存放 db, keys, conf.ini)")
+	var (
+		configFlag string
+		dirFlag    string
+		portFlag   string
+		hostFlag   string
+	)
+	flag.StringVar(&configFlag, "config", "", "数据配置目录 (存放 db、keys)")
 	flag.StringVar(&dirFlag, "dir", "", "文件存储目录 (存放用户上传的文件)")
+	flag.StringVar(&portFlag, "port", "6677", "监听端口")
+	flag.StringVar(&hostFlag, "host", "0.0.0.0", "监听地址")
 	flag.Parse()
 
-	var dataDir string
-	var storageDir string
-
-	// 逻辑判断：按照用户要求的优先级设定目录
+	// ── 确定数据目录与存储目录 ────────────────────────────────────────────────
+	var dataDir, storageDir string
 	if configFlag != "" && dirFlag != "" {
 		dataDir = configFlag
 		storageDir = dirFlag
-	} else if configFlag != "" && dirFlag == "" {
+	} else if configFlag != "" {
 		dataDir = configFlag
 		storageDir = filepath.Join(configFlag, "storage")
-	} else if configFlag == "" && dirFlag != "" {
+	} else if dirFlag != "" {
 		dataDir = "./data"
 		storageDir = dirFlag
 	} else {
@@ -96,18 +99,11 @@ func main() {
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		log.Fatal("Failed to create data directory:", err)
 	}
-	// 预创建存储目录（如果不存在）
 	if err := os.MkdirAll(storageDir, 0755); err != nil {
 		log.Fatal("Failed to create initial storage directory:", err)
 	}
 
-	// ── 配置文件与数据库 ──────────────────────────────────────────────────────
-	confPath := filepath.Join(dataDir, "conf.ini")
-	cfg, err := config.Load(confPath)
-	if err != nil {
-		log.Fatal("Failed to load config:", err)
-	}
-
+	// ── Master Key ────────────────────────────────────────────────────────────
 	masterKeyPath := filepath.Join(dataDir, "master.key")
 	masterKey := os.Getenv("CLOUDONE_MASTER_KEY")
 	if masterKey == "" {
@@ -128,36 +124,38 @@ func main() {
 	}
 	auth.SetMasterKey(masterKey)
 
+	// ── 数据库初始化 ──────────────────────────────────────────────────────────
 	db, err := auth.InitDB(filepath.Join(dataDir, "cloudone.db"))
 	if err != nil {
 		log.Fatal("Failed to init DB:", err)
 	}
 
 	// ── 确定最终存储目录 ──────────────────────────────────────────────────────
+	settingsPtr, _ := db.GetSettings()
 	var settings auth.Settings
-	db.First(&settings)
+	if settingsPtr != nil {
+		settings = *settingsPtr
+	}
 
-	// 如果命令行明确指定了 --dir，则强制覆盖数据库中的设置并更新数据库
+	// 如果命令行明确指定了 --dir，强制覆盖数据库中的设置并持久化
 	if dirFlag != "" {
 		storageDir = dirFlag
 		if settings.StorageDir != storageDir {
 			settings.StorageDir = storageDir
-			db.Save(&settings)
+			_ = db.SaveSettings(&settings)
 			log.Println("Storage directory updated from command line:", storageDir)
 		}
 	} else if settings.StorageDir != "" {
-		// 如果命令行没指明，且数据库里有旧记录，则沿用数据库的
 		storageDir = settings.StorageDir
 	}
 
-	// 再次确保最终确定的存储目录存在
 	if err := os.MkdirAll(storageDir, 0755); err != nil {
 		log.Fatal("Failed to ensure storage directory:", err)
 	}
-	log.Println("Data directory:", dataDir)
+	log.Println("Data directory:   ", dataDir)
 	log.Println("Storage directory:", storageDir)
 
-	// ── JWT Secret ──────────────────────────────────────────────────────────
+	// ── JWT Secret ────────────────────────────────────────────────────────────
 	jwtSecret := os.Getenv("CLOUDONE_JWT_SECRET")
 	if jwtSecret == "" {
 		secret, err := settings.GetJWTSecret()
@@ -175,14 +173,10 @@ func main() {
 		if err := settings.SetJWTSecret(jwtSecret); err != nil {
 			log.Fatal("Failed to encrypt JWT secret:", err)
 		}
-		db.Save(&settings)
+		_ = db.SaveSettings(&settings)
 		log.Println("Generated new JWT secret, stored encrypted in database")
 	}
 	handler.SetJWTSecret(jwtSecret)
-
-	if err := config.Save(confPath, cfg); err != nil {
-		log.Println("Warning: could not write conf.ini:", err)
-	}
 
 	fileManager := files.NewManager(storageDir, db)
 	shareManager := files.NewShareManager(db)
@@ -191,7 +185,6 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery())
-	// 不信任任何代理的 IP 转发头，IP 真实性由 handler.GinRealIP 自行判断
 	r.SetTrustedProxies(nil)
 	r.RedirectTrailingSlash = false
 	r.RedirectFixedPath = false
@@ -210,7 +203,7 @@ func main() {
 		AllowCredentials: false,
 	}))
 
-	h := handler.New(db, fileManager, shareManager, confPath)
+	h := handler.New(db, fileManager, shareManager)
 
 	api := r.Group("/api")
 	{
@@ -253,7 +246,7 @@ func main() {
 
 			authed.GET("/ws/terminal", h.TerminalWebSocket)
 
-		authed.POST("/share", h.CreateShare)
+			authed.POST("/share", h.CreateShare)
 			authed.GET("/share", h.ListShares)
 			authed.DELETE("/share/:id", h.DeleteShare)
 
@@ -326,7 +319,7 @@ func main() {
 		serveIndex(c)
 	})
 
-	addr := cfg.Host + ":" + cfg.Port
+	addr := hostFlag + ":" + portFlag
 	log.Println("CloudOne starting on", addr)
 	if err := r.Run(addr); err != nil {
 		log.Fatal(err)
