@@ -9,19 +9,10 @@ import (
 	"time"
 
 	"github.com/cloudone/cloudone/internal/auth"
-	"gorm.io/gorm"
 )
 
-// dangerPrefixes 列出所有需要屏蔽的虚拟文件系统路径前缀。
-// 无论存储根是 / 还是其他路径，凡是绝对路径命中这些前缀的操作一律拒绝，
-// 防止扫描 /proc /sys /dev 导致内存暴涨或系统异常。
-var dangerPrefixes = []string{
-	"/proc",
-	"/sys",
-	"/dev",
-}
+var dangerPrefixes = []string{"/proc", "/sys", "/dev"}
 
-// isDangerPath 判断一个绝对路径是否落在危险虚拟文件系统下。
 func isDangerPath(absPath string) bool {
 	clean := filepath.Clean(absPath)
 	for _, p := range dangerPrefixes {
@@ -44,17 +35,16 @@ type FileInfo struct {
 
 type Manager struct {
 	root string
-	db   *gorm.DB
+	db   *auth.DB
 }
 
-func NewManager(root string, db *gorm.DB) *Manager {
+func NewManager(root string, db *auth.DB) *Manager {
 	return &Manager{root: root, db: db}
 }
 
 func (m *Manager) SetRoot(root string) { m.root = root }
 func (m *Manager) Root() string        { return m.root }
 
-// normalizePath 统一路径格式：以 / 开头，无尾随 /，无重复 /
 func normalizePath(p string) string {
 	trimmed := strings.TrimLeft(p, "/")
 	if trimmed == "" {
@@ -63,7 +53,6 @@ func normalizePath(p string) string {
 	return filepath.Clean("/" + trimmed)
 }
 
-// AbsPath 将逻辑路径转为磁盘绝对路径，并验证不超出 root（防路径穿越）。
 func (m *Manager) AbsPath(rel string) (string, error) {
 	norm := normalizePath(rel)
 	abs := filepath.Join(m.root, norm)
@@ -76,8 +65,6 @@ func (m *Manager) AbsPath(rel string) (string, error) {
 	return abs, nil
 }
 
-// SafeAbsPath 在 AbsPath 基础上额外拒绝虚拟文件系统路径（/proc /sys /dev /run）。
-// 用于列目录、读写、删除等实际操作，防止扫描虚拟目录导致内存暴涨。
 func (m *Manager) SafeAbsPath(rel string) (string, error) {
 	abs, err := m.AbsPath(rel)
 	if err != nil {
@@ -90,49 +77,26 @@ func (m *Manager) SafeAbsPath(rel string) (string, error) {
 }
 
 // ── 可见性核心逻辑 ────────────────────────────────────────────────────────────
-//
-// 设计原则：
-//   公开性是对路径本身的「显式标记」，不存在父目录继承。
-//   设置公开时，对该路径及其所有子路径逐一写入 is_public=true 记录。
-//   设置私有时，删除该路径及所有子路径的所有记录（回归默认私有）。
-//   移动/复制：可见性记录随文件一起迁移，不丢失也不新增。
-//   新建/上传：新路径没有记录，默认私有，不受任何已有记录影响。
-//   删除：先删文件，再清除所有相关记录，保持 DB 干净。
 
-// IsPublic 判断路径是否有精确的 is_public=true 记录。
 func (m *Manager) IsPublic(rel string) bool {
 	norm := normalizePath(rel)
-	var count int64
-	m.db.Model(&auth.FileVisibility{}).
-		Where("file_path = ? AND is_public = ?", norm, true).
-		Count(&count)
-	return count > 0
+	vis, err := m.db.GetVisibility(norm)
+	if err != nil {
+		return false
+	}
+	return vis.IsPublic
 }
 
-// SetVisibility 设置文件/目录的公开状态。
-//   isPublic=true  → 对该路径及文件系统中所有子路径写入 is_public=true
-//   isPublic=false → 删除该路径及所有子路径的所有记录（恢复默认私有）
 func (m *Manager) SetVisibility(rel string, isPublic bool) error {
 	norm := normalizePath(rel)
-	likePattern := norm + "/%"
-	if norm == "/" {
-		likePattern = "/%"
-	}
-
 	if !isPublic {
-		// 私有：直接删除所有相关记录
-		m.db.Where("file_path = ? OR file_path LIKE ?", norm, likePattern).
-			Delete(&auth.FileVisibility{})
-		return nil
+		return m.db.DeleteVisibilityPrefix(norm)
 	}
-
-	// 公开：对该路径及文件系统所有子路径写入显式标记
 	return m.markPublicRecursive(norm)
 }
 
-// markPublicRecursive 递归地为 norm 及其文件系统子路径写入 is_public=true。
 func (m *Manager) markPublicRecursive(norm string) error {
-	if err := m.upsertVisibility(norm, true); err != nil {
+	if err := m.db.SetVisibility(norm, true); err != nil {
 		return err
 	}
 	abs, err := m.SafeAbsPath(norm)
@@ -156,63 +120,22 @@ func (m *Manager) markPublicRecursive(norm string) error {
 	return nil
 }
 
-// upsertVisibility 写入或更新单条可见性记录。
-func (m *Manager) upsertVisibility(path string, isPublic bool) error {
-	var vis auth.FileVisibility
-	if m.db.Where("file_path = ?", path).First(&vis).Error != nil {
-		return m.db.Create(&auth.FileVisibility{FilePath: path, IsPublic: isPublic}).Error
-	}
-	vis.IsPublic = isPublic
-	return m.db.Save(&vis).Error
-}
-
-// deleteVisibilityTree 删除 norm 及其所有子路径的可见性记录。
 func (m *Manager) deleteVisibilityTree(norm string) {
-	likePattern := norm + "/%"
-	if norm == "/" {
-		likePattern = "/%"
-	}
-	m.db.Where("file_path = ? OR file_path LIKE ?", norm, likePattern).
-		Delete(&auth.FileVisibility{})
+	_ = m.db.DeleteVisibilityPrefix(norm)
 }
 
-// migrateVisibility 将 srcNorm 及子路径的记录迁移到 dstNorm（用于 Move）。
 func (m *Manager) migrateVisibility(srcNorm, dstNorm string) {
-	likePattern := srcNorm + "/%"
-	if srcNorm == "/" {
-		likePattern = "/%"
-	}
-	var records []auth.FileVisibility
-	m.db.Where("file_path = ? OR file_path LIKE ?", srcNorm, likePattern).Find(&records)
-	if len(records) == 0 {
+	_ = m.db.RenameVisibilityPrefix(srcNorm, dstNorm)
+}
+
+func (m *Manager) copyVisibility(srcNorm, dstNorm string) {
+	records, err := m.db.ListPublicVisibilityByPrefix(srcNorm)
+	if err != nil {
 		return
 	}
-	// 先删旧记录，再用新路径写入
-	m.db.Where("file_path = ? OR file_path LIKE ?", srcNorm, likePattern).
-		Delete(&auth.FileVisibility{})
 	for _, r := range records {
-		newPath := dstNorm
-		if r.FilePath != srcNorm {
-			newPath = dstNorm + strings.TrimPrefix(r.FilePath, srcNorm)
-		}
-		m.upsertVisibility(newPath, r.IsPublic)
-	}
-}
-
-// copyVisibility 将 srcNorm 及子路径的记录复制到 dstNorm（用于 Copy）。
-func (m *Manager) copyVisibility(srcNorm, dstNorm string) {
-	likePattern := srcNorm + "/%"
-	if srcNorm == "/" {
-		likePattern = "/%"
-	}
-	var records []auth.FileVisibility
-	m.db.Where("file_path = ? OR file_path LIKE ?", srcNorm, likePattern).Find(&records)
-	for _, r := range records {
-		newPath := dstNorm
-		if r.FilePath != srcNorm {
-			newPath = dstNorm + strings.TrimPrefix(r.FilePath, srcNorm)
-		}
-		m.upsertVisibility(newPath, r.IsPublic)
+		newPath := dstNorm + r.FilePath[len(srcNorm):]
+		_ = m.db.SetVisibility(newPath, r.IsPublic)
 	}
 }
 
@@ -229,15 +152,13 @@ func (m *Manager) ListDir(rel string) ([]FileInfo, error) {
 	}
 	norm := normalizePath(rel)
 
-	// 批量查询子项的可见性（精确匹配，无继承）
 	childPaths := make([]string, 0, len(entries))
 	for _, e := range entries {
 		childPaths = append(childPaths, normalizePath(norm+"/"+e.Name()))
 	}
 	visMap := make(map[string]bool)
 	if len(childPaths) > 0 {
-		var visList []auth.FileVisibility
-		m.db.Where("file_path IN ? AND is_public = ?", childPaths, true).Find(&visList)
+		visList, _ := m.db.ListVisibilityByPaths(childPaths)
 		for _, v := range visList {
 			visMap[v.FilePath] = true
 		}
@@ -248,15 +169,11 @@ func (m *Manager) ListDir(rel string) ([]FileInfo, error) {
 		childAbs := filepath.Join(abs, e.Name())
 		childRel := normalizePath(norm + "/" + e.Name())
 
-		// 用 os.Stat 跟随符号链接，获取真实文件信息
 		realInfo, statErr := os.Stat(childAbs)
-
 		isDir := e.IsDir()
 		if statErr == nil {
 			isDir = realInfo.IsDir()
 		}
-
-		// 屏蔽危险虚拟文件系统路径（/proc /sys /dev /run 及其子目录）
 		if isDangerPath(childAbs) {
 			continue
 		}
@@ -289,7 +206,6 @@ func (m *Manager) MkDir(rel string) error {
 	return os.MkdirAll(abs, 0755)
 }
 
-// Delete 删除文件/目录，并清除所有相关可见性记录。
 func (m *Manager) Delete(rel string) error {
 	if rel == "" || rel == "/" {
 		return errors.New("cannot delete root directory")
@@ -305,7 +221,6 @@ func (m *Manager) Delete(rel string) error {
 	return nil
 }
 
-// Move 移动文件/目录，可见性记录随之迁移。
 func (m *Manager) Move(src, dst string) error {
 	srcAbs, err := m.SafeAbsPath(src)
 	if err != nil {
@@ -322,7 +237,6 @@ func (m *Manager) Move(src, dst string) error {
 	return nil
 }
 
-// Copy 复制文件/目录，可见性记录随之复制。
 func (m *Manager) Copy(src, dst string) error {
 	srcAbs, err := m.SafeAbsPath(src)
 	if err != nil {
@@ -366,8 +280,6 @@ func (m *Manager) Write(rel string, r io.Reader) error {
 	return err
 }
 
-// ReadContent 读取文件内容，最多 2MB。
-// 使用 io.LimitReader + io.ReadAll，避免单次 Read 不保证读满的问题。
 func (m *Manager) ReadContent(rel string) (string, error) {
 	abs, err := m.SafeAbsPath(rel)
 	if err != nil {
@@ -414,7 +326,6 @@ func (m *Manager) Open(rel string) (*os.File, error) {
 	return os.Open(abs)
 }
 
-// ListPublic 返回目录下有 is_public=true 标记的直接子条目（用于已登录管理界面浏览某目录时）。
 func (m *Manager) ListPublic(rel string) ([]FileInfo, error) {
 	all, err := m.ListDir(rel)
 	if err != nil {
@@ -429,49 +340,35 @@ func (m *Manager) ListPublic(rel string) ([]FileInfo, error) {
 	return result, nil
 }
 
-// GetAllPublicFlat 返回所有公开条目的平铺列表，规则：
-//
-//   - 从 DB 取出全部 is_public=true 的路径
-//   - 若某路径的直接父路径也有 is_public=true 记录，则跳过该路径
-//     （它会在父文件夹被浏览时展示，不需要在顶层重复出现）
-//   - 若某路径的直接父路径没有 is_public=true 记录，则直接列在顶层
-//
-// 效果：无论文件/文件夹在多深层级都直接浮现到顶层，不显示任何父文件夹。
-// 被整体设为公开的文件夹，其内部子项不会重复出现在顶层。
 func (m *Manager) GetAllPublicFlat() ([]FileInfo, error) {
-	// 1. 取出所有 is_public=true 的路径
-	var records []auth.FileVisibility
-	if err := m.db.Where("is_public = ?", true).Find(&records).Error; err != nil {
+	records, err := m.db.ListPublicVisibility()
+	if err != nil {
 		return nil, err
 	}
 
-	// 2. 建立快速查找集合
 	publicSet := make(map[string]struct{}, len(records))
 	for _, r := range records {
 		publicSet[r.FilePath] = struct{}{}
 	}
 
-	// 3. 过滤：只保留「父路径没有 is_public=true 记录」的条目
 	result := make([]FileInfo, 0)
 	for _, r := range records {
 		parentPath := filepath.Dir(r.FilePath)
 		if parentPath == "." {
 			parentPath = "/"
 		}
-		// 父路径也是公开的，跳过（避免重复，由父文件夹包含）
 		if _, parentPublic := publicSet[parentPath]; parentPublic {
 			continue
 		}
 
-		// 4. 从文件系统获取该条目的实际信息
 		abs, err := m.SafeAbsPath(r.FilePath)
 		if err != nil {
 			continue
 		}
 		info, err := os.Stat(abs)
 		if err != nil {
-			// 文件已不存在，清理这条脏记录
-			m.db.Delete(&r)
+			// 文件已不存在，清理脏记录
+			_ = m.db.DeleteVisibilityPrefix(r.FilePath)
 			continue
 		}
 
@@ -496,8 +393,12 @@ func (m *Manager) GetAllPublicFlat() ([]FileInfo, error) {
 
 const searchMaxResults = 200
 
-// SearchFiles 在指定目录（含子目录）中按文件名模糊搜索（大小写不敏感，包含匹配）。
-// 结果上限 200 条，超过后停止遍历。
+type SearchResult struct {
+	Name  string `json:"name"`
+	Path  string `json:"path"`
+	IsDir bool   `json:"is_dir"`
+}
+
 func (m *Manager) SearchFiles(dir, keyword string) ([]SearchResult, error) {
 	absDir, err := m.SafeAbsPath(dir)
 	if err != nil {
@@ -509,9 +410,8 @@ func (m *Manager) SearchFiles(dir, keyword string) ([]SearchResult, error) {
 
 	err = filepath.WalkDir(absDir, func(p string, d os.DirEntry, werr error) error {
 		if werr != nil {
-			return nil // 跳过无权限目录
+			return nil
 		}
-		// 跳过虚拟文件系统目录，防止内存暴涨
 		if d.IsDir() && isDangerPath(p) {
 			return filepath.SkipDir
 		}
@@ -533,12 +433,6 @@ func (m *Manager) SearchFiles(dir, keyword string) ([]SearchResult, error) {
 		return nil
 	})
 	return results, err
-}
-
-type SearchResult struct {
-	Name  string `json:"name"`
-	Path  string `json:"path"`
-	IsDir bool   `json:"is_dir"`
 }
 
 // ── 内部工具函数 ──────────────────────────────────────────────────────────────
