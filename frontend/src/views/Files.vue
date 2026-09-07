@@ -2798,11 +2798,18 @@ watch(() => _route.params.pathMatch, (val) => {
   /* 隐藏桌面端头部 */
   .page-header { display:none; }
 
-  /* 移动端「详细信息」：图标+名称+大小+权限（不显示修改时间） */
+  /* 移动端内容区：贴边显示，减少左右留白 */
+  .drop-zone { padding:12px 8px !important; }
+
+  /* 移动端行内左右 padding 缩小，把空间留给列内容 */
+  .file-row { padding:12px 10px !important; }
+  .file-header { padding:8px 10px !important; }
+
+  /* 移动端「详细信息」：图标+名称+大小+权限（不显示修改时间），列宽更宽 */
   .file-table.mode-detail .file-header,
-  .file-table.mode-detail .file-row { grid-template-columns:1fr 64px 60px !important; }
+  .file-table.mode-detail .file-row { grid-template-columns:1fr 72px 68px !important; }
   .file-table.mode-detail .file-header.has-check,
-  .file-table.mode-detail .file-row.select-mode { grid-template-columns:44px 1fr 64px 60px !important; }
+  .file-table.mode-detail .file-row.select-mode { grid-template-columns:44px 1fr 72px 68px !important; }
   .file-table.mode-detail .col-date, .file-table.mode-detail .col-type { display:none !important; }
   /* 移动端「列表」：仅图标+名称，2 列网格 */
   .file-table.mode-list .file-table-body { grid-template-columns:repeat(2, 1fr) !important; }
@@ -3046,15 +3053,17 @@ watch(() => _route.params.pathMatch, (val) => {
 }
 
 @media (max-width: 480px) {
+  /* 极小屏进一步收窄外边距 */
+  .drop-zone { padding:8px 4px !important; }
   /* 「列表」模式：极小屏仍保持 2 列网格 */
   .file-table.mode-list .file-table-body { grid-template-columns:repeat(2, 1fr) !important; }
   .file-table.mode-list .file-row { grid-template-columns:1fr !important; padding:10px 10px; }
   .file-table.mode-list .file-row.select-mode { grid-template-columns:24px 1fr !important; }
-  /* 「详细信息」模式：极小屏进一步收窄大小/权限列宽度，但仍保留显示 */
+  /* 「详细信息」模式：极小屏保留合理列宽 */
   .file-table.mode-detail .file-header,
-  .file-table.mode-detail .file-row { grid-template-columns:1fr 52px 50px !important; }
+  .file-table.mode-detail .file-row { grid-template-columns:1fr 64px 58px !important; }
   .file-table.mode-detail .file-header.has-check,
-  .file-table.mode-detail .file-row.select-mode { grid-template-columns:36px 1fr 52px 50px !important; }
+  .file-table.mode-detail .file-row.select-mode { grid-template-columns:36px 1fr 64px 58px !important; }
   .file-icon { width:32px; height:32px; border-radius:7px; }
   .file-icon svg { width:15px; height:15px; }
   .mob-crumb-item { max-width:80px; }
