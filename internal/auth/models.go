@@ -76,8 +76,8 @@ func Decrypt(encoded string) (string, error) {
 type User struct {
 	ID           uint      `json:"id"`
 	Username     string    `json:"username"`
-	Password     string    `json:"-"`
-	TokenVersion int       `json:"-"`
+	Password     string    `json:"password"`
+	TokenVersion int       `json:"token_version"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
@@ -95,8 +95,8 @@ type Settings struct {
 	WebDAVEnabled     bool   `json:"webdav_enabled"`
 	WebDAVSubPath     string `json:"webdav_sub_path"`
 	WebDAVUsername    string `json:"webdav_username"`
-	WebDAVPasswordEnc string `json:"-"` // AES-GCM(bcrypt(password))
-	JWTSecretEnc      string `json:"-"` // AES-GCM(jwt_secret)
+	WebDAVPasswordEnc string `json:"webdav_password_enc"` // AES-GCM(bcrypt(password))，存 DB 不暴露给前端
+	JWTSecretEnc      string `json:"jwt_secret_enc"`      // AES-GCM(jwt_secret)，存 DB 不暴露给前端
 	ShowHidden        bool   `json:"show_hidden"`
 	FileViewMode      string `json:"file_view_mode"`  // list | detail | icon-large | icon-small
 	FileSortBy        string `json:"file_sort_by"`    // name | date | type | size
