@@ -2799,7 +2799,7 @@ watch(() => _route.params.pathMatch, (val) => {
   .page-header { display:none; }
 
   /* 移动端内容区：留出适当左右边距 */
-  .drop-zone { padding:12px 14px !important; }
+  .drop-zone { padding:14px 18px !important; }
 
   /* 移动端行内左右 padding 缩小，把空间留给列内容 */
   .file-row { padding:12px 10px !important; }
@@ -3054,7 +3054,7 @@ watch(() => _route.params.pathMatch, (val) => {
 
 @media (max-width: 480px) {
   /* 极小屏适当收窄，但仍保留可辨识的边距 */
-  .drop-zone { padding:10px 10px !important; }
+  .drop-zone { padding:12px 14px !important; }
   /* 「列表」模式：极小屏仍保持 2 列网格 */
   .file-table.mode-list .file-table-body { grid-template-columns:repeat(2, 1fr) !important; }
   .file-table.mode-list .file-row { grid-template-columns:1fr !important; padding:10px 10px; }
