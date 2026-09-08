@@ -240,13 +240,32 @@ func (h *Handler) UpdateUser(c *gin.Context) {
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 
+// safeSettings 返回不含敏感加密字段的 Settings 给前端
+func safeSettings(s auth.Settings) gin.H {
+	return gin.H{
+		"storage_dir":          s.StorageDir,
+		"lang":                 s.Lang,
+		"ui_theme":             s.UITheme,
+		"ui_font":              s.UIFont,
+		"editor_font":          s.EditorFont,
+		"webdav_enabled":       s.WebDAVEnabled,
+		"webdav_sub_path":      s.WebDAVSubPath,
+		"webdav_username":      s.WebDAVUsername,
+		"show_hidden":          s.ShowHidden,
+		"file_view_mode":       s.FileViewMode,
+		"file_sort_by":         s.FileSortBy,
+		"file_sort_order":      s.FileSortOrder,
+		"github_proxy_enabled": s.GithubProxyEnabled,
+	}
+}
+
 func (h *Handler) GetSettings(c *gin.Context) {
 	sPtr, _ := h.db.GetSettings()
 	var s auth.Settings
 	if sPtr != nil {
 		s = *sPtr
 	}
-	c.JSON(200, s) // json:"-" 字段自动过滤，敏感字段不暴露
+	c.JSON(200, safeSettings(s))
 }
 
 func (h *Handler) UpdateSettings(c *gin.Context) {
@@ -319,7 +338,7 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 		s.FileSortOrder = req.FileSortOrder
 	}
 	_ = h.db.SaveSettings(&s)
-	c.JSON(200, s)
+	c.JSON(200, safeSettings(s))
 }
 
 // ── WebDAV Settings ───────────────────────────────────────────────────────────
