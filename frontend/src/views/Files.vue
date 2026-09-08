@@ -2798,12 +2798,8 @@ watch(() => _route.params.pathMatch, (val) => {
   /* 隐藏桌面端头部 */
   .page-header { display:none; }
 
-  /* 移动端内容区：贴边显示，减少左右留白 */
-  .drop-zone { padding:12px 8px !important; }
-
-  /* 移动端行内左右 padding 缩小，把空间留给列内容 */
-  .file-row { padding:12px 10px !important; }
-  .file-header { padding:8px 10px !important; }
+  /* 移动端内容区：适度留白，不贴边也不浪费 */
+  .drop-zone { padding:12px 14px !important; }
 
   /* 移动端「详细信息」：图标+名称+大小+权限（不显示修改时间），列宽更宽 */
   .file-table.mode-detail .file-header,
@@ -3053,8 +3049,8 @@ watch(() => _route.params.pathMatch, (val) => {
 }
 
 @media (max-width: 480px) {
-  /* 极小屏进一步收窄外边距 */
-  .drop-zone { padding:8px 4px !important; }
+  /* 极小屏适度留白 */
+  .drop-zone { padding:8px 10px !important; }
   /* 「列表」模式：极小屏仍保持 2 列网格 */
   .file-table.mode-list .file-table-body { grid-template-columns:repeat(2, 1fr) !important; }
   .file-table.mode-list .file-row { grid-template-columns:1fr !important; padding:10px 10px; }
