@@ -391,6 +391,7 @@ dependencies = [
  "jsonwebtoken",
  "libc",
  "mime_guess",
+ "percent-encoding",
  "rand 0.8.8",
  "redb",
  "reqwest",

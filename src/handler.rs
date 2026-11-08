@@ -1291,13 +1291,14 @@ pub async fn fetch_url(State(state): State<AppState>, Json(req): Json<FetchReq>)
             .collect();
     }
 
-    // 确定保存文件名（从原始 URL 推断，避免代理前缀影响）
-    let fname = req.filename.clone().unwrap_or_else(|| {
-        url::Url::parse(&req.url).ok()
-            .and_then(|u| u.path_segments()?.next_back().map(str::to_string))
-            .filter(|s| !s.is_empty() && *s != "." && *s != "/")
-            .unwrap_or("download".into())
-    });
+    // 确定保存文件名（从原始 URL 推断，避免代理前缀影响）。
+    // 对齐 Go：先判空串（前端"留空"提交的是 "" 而非 null），
+    // 再 filepath.Base(url.Path)——url.Path 已百分号解码、Base 会去掉尾部斜杠。
+    let fname = req
+        .filename
+        .clone()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| infer_filename_from_url(&req.url));
     let out = dir.join(safe_name(&fname));
 
     let mut last_err = String::new();
@@ -1331,6 +1332,23 @@ pub async fn fetch_url(State(state): State<AppState>, Json(req): Json<FetchReq>)
         }
     }
     json_error(StatusCode::INTERNAL_SERVER_ERROR, last_err)
+}
+
+/// 对齐 Go FetchURL：filename 留空时从原始 URL 推断保存名。
+/// 等价于 filepath.Base(u.Path)：u.Path 为百分号解码后的路径，
+/// Base 先去掉全部尾部斜杠再取最后一段；取不到时回落 "download"。
+/// 注：Go 对 ".." 会放行（Join 后越界写父目录），此处回落 "download" 更安全。
+fn infer_filename_from_url(raw: &str) -> String {
+    let Ok(u) = url::Url::parse(raw) else {
+        return "download".into();
+    };
+    let path = percent_encoding::percent_decode_str(u.path()).decode_utf8_lossy();
+    let base = path.trim_end_matches('/').rsplit('/').next().unwrap_or("");
+    if base.is_empty() || base == "." || base == ".." {
+        "download".into()
+    } else {
+        base.to_string()
+    }
 }
 
 // ── Archive helpers ───────────────────────────────────────────────────────────
@@ -1383,4 +1401,37 @@ fn tar_add<W: Write>(tw: &mut TarBuilder<W>, abs: &Path, name: &str) -> std::io:
         tw.append(&hdr, &mut f)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::infer_filename_from_url;
+
+    #[test]
+    fn infer_filename_matches_go() {
+        // 常规：取最后一段
+        assert_eq!(infer_filename_from_url("https://host/file.zip"), "file.zip");
+        assert_eq!(
+            infer_filename_from_url("https://github.com/git/git/archive/refs/tags/v2.0.zip"),
+            "v2.0.zip"
+        );
+        // query 忽略
+        assert_eq!(
+            infer_filename_from_url("https://host/file.zip?token=x"),
+            "file.zip"
+        );
+        // 尾部斜杠：对齐 Go filepath.Base，取目录名
+        assert_eq!(infer_filename_from_url("https://host/path/"), "path");
+        assert_eq!(infer_filename_from_url("https://host/a/b//"), "b");
+        // 百分号解码：对齐 Go url.Parse 的 u.Path
+        assert_eq!(
+            infer_filename_from_url("https://host/a/b/my%20file.zip"),
+            "my file.zip"
+        );
+        // 无路径 / 根路径 / 危险段 → download
+        assert_eq!(infer_filename_from_url("https://host"), "download");
+        assert_eq!(infer_filename_from_url("https://host/"), "download");
+        assert_eq!(infer_filename_from_url("https://host/a/.."), "download");
+        assert_eq!(infer_filename_from_url("not a url"), "download");
+    }
 }

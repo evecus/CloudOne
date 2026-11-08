@@ -31,10 +31,9 @@ futures-util = "0.3"
 tokio-util = { version = "0.7", features = ["io"] }
 url = "2"
 libc = "0.2"
+percent-encoding = "2.3.2"
 
 [profile.release]
-opt-level = "z"
+strip = true
 lto = true
 codegen-units = 1
-panic = "abort"
-strip = true
