@@ -1,0 +1,194 @@
+:root {
+  /* 主题色（默认蓝白） */
+  --blue-50: #EFF6FF;
+  --blue-100: #DBEAFE;
+  --blue-200: #BFDBFE;
+  --blue-400: #60A5FA;
+  --blue-500: #3B82F6;
+  --blue-600: #2563EB;
+  --blue-700: #1D4ED8;
+  --sky-400: #38BDF8;
+  --sky-500: #0EA5E9;
+  --primary-gradient: linear-gradient(135deg, #2563EB, #0EA5E9);
+  --primary-gradient-soft: linear-gradient(135deg, rgba(37,99,235,0.1), rgba(56,189,248,0.08));
+  --primary-shadow: 0 4px 12px rgba(37,99,235,0.25);
+  --primary-shadow-hover: 0 6px 20px rgba(37,99,235,0.3);
+  --white: #FFFFFF;
+  --gray-50: #F8FAFC;
+  --gray-100: #F1F5F9;
+  --gray-200: #E2E8F0;
+  --gray-300: #CBD5E1;
+  --gray-400: #94A3B8;
+  --gray-500: #64748B;
+  --gray-600: #475569;
+  --gray-700: #334155;
+  --gray-800: #1E293B;
+  --gray-900: #0F172A;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-lg: 16px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow: 0 4px 16px rgba(37,99,235,0.08), 0 2px 6px rgba(0,0,0,0.04);
+  --shadow-lg: 0 20px 60px rgba(37,99,235,0.12), 0 8px 24px rgba(0,0,0,0.06);
+  --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #app {
+  height: 100%;
+  font-family: var(--ui-font, 'Sora', -apple-system, sans-serif);
+  background: var(--gray-50);
+  color: var(--gray-800);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--gray-400); }
+
+/* Transitions */
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+
+.slide-up-enter-active { transition: all 0.3s cubic-bezier(0.4,0,0.2,1); }
+.slide-up-enter-from { opacity: 0; transform: translateY(16px); }
+
+/* ===== 主题：玫瑰粉 ===== */
+[data-theme="rose"] {
+  --blue-50: #FFF1F2;
+  --blue-100: #FFE4E6;
+  --blue-200: #FECDD3;
+  --blue-400: #FB7185;
+  --blue-500: #F43F5E;
+  --blue-600: #E11D48;
+  --blue-700: #BE123C;
+  --sky-400: #FB7185;
+  --sky-500: #F43F5E;
+  --primary-gradient: linear-gradient(135deg, #E11D48, #FB7185);
+  --primary-gradient-soft: linear-gradient(135deg, rgba(225,29,72,0.1), rgba(251,113,133,0.08));
+  --primary-shadow: 0 4px 12px rgba(225,29,72,0.25);
+  --primary-shadow-hover: 0 6px 20px rgba(225,29,72,0.3);
+  --shadow: 0 4px 16px rgba(225,29,72,0.08), 0 2px 6px rgba(0,0,0,0.04);
+  --shadow-lg: 0 20px 60px rgba(225,29,72,0.12), 0 8px 24px rgba(0,0,0,0.06);
+}
+
+/* ===== 主题：森绿 ===== */
+[data-theme="forest"] {
+  --blue-50: #F0FDF4;
+  --blue-100: #DCFCE7;
+  --blue-200: #BBF7D0;
+  --blue-400: #4ADE80;
+  --blue-500: #22C55E;
+  --blue-600: #16A34A;
+  --blue-700: #15803D;
+  --sky-400: #4ADE80;
+  --sky-500: #22C55E;
+  --primary-gradient: linear-gradient(135deg, #16A34A, #4ADE80);
+  --primary-gradient-soft: linear-gradient(135deg, rgba(22,163,74,0.1), rgba(74,222,128,0.08));
+  --primary-shadow: 0 4px 12px rgba(22,163,74,0.25);
+  --primary-shadow-hover: 0 6px 20px rgba(22,163,74,0.3);
+  --shadow: 0 4px 16px rgba(22,163,74,0.08), 0 2px 6px rgba(0,0,0,0.04);
+  --shadow-lg: 0 20px 60px rgba(22,163,74,0.12), 0 8px 24px rgba(0,0,0,0.06);
+}
+
+/* ===== 主题：暖橙 ===== */
+[data-theme="amber"] {
+  --blue-50: #FFFBEB;
+  --blue-100: #FEF3C7;
+  --blue-200: #FDE68A;
+  --blue-400: #FBBF24;
+  --blue-500: #F59E0B;
+  --blue-600: #D97706;
+  --blue-700: #B45309;
+  --sky-400: #FBBF24;
+  --sky-500: #F59E0B;
+  --primary-gradient: linear-gradient(135deg, #D97706, #FBBF24);
+  --primary-gradient-soft: linear-gradient(135deg, rgba(217,119,6,0.1), rgba(251,191,36,0.08));
+  --primary-shadow: 0 4px 12px rgba(217,119,6,0.25);
+  --primary-shadow-hover: 0 6px 20px rgba(217,119,6,0.3);
+  --shadow: 0 4px 16px rgba(217,119,6,0.08), 0 2px 6px rgba(0,0,0,0.04);
+  --shadow-lg: 0 20px 60px rgba(217,119,6,0.12), 0 8px 24px rgba(0,0,0,0.06);
+}
+
+/* ===== 主题：紫罗兰 ===== */
+[data-theme="violet"] {
+  --blue-50: #F5F3FF;
+  --blue-100: #EDE9FE;
+  --blue-200: #DDD6FE;
+  --blue-400: #A78BFA;
+  --blue-500: #8B5CF6;
+  --blue-600: #7C3AED;
+  --blue-700: #6D28D9;
+  --sky-400: #A78BFA;
+  --sky-500: #8B5CF6;
+  --primary-gradient: linear-gradient(135deg, #7C3AED, #A78BFA);
+  --primary-gradient-soft: linear-gradient(135deg, rgba(124,58,237,0.1), rgba(167,139,250,0.08));
+  --primary-shadow: 0 4px 12px rgba(124,58,237,0.25);
+  --primary-shadow-hover: 0 6px 20px rgba(124,58,237,0.3);
+  --shadow: 0 4px 16px rgba(124,58,237,0.08), 0 2px 6px rgba(0,0,0,0.04);
+  --shadow-lg: 0 20px 60px rgba(124,58,237,0.12), 0 8px 24px rgba(0,0,0,0.06);
+}
+
+/* ===== 主题：碳岩青 ===== */
+[data-theme="teal"] {
+  --blue-50: #F0FDFA;
+  --blue-100: #CCFBF1;
+  --blue-200: #99F6E4;
+  --blue-400: #2DD4BF;
+  --blue-500: #14B8A6;
+  --blue-600: #0D9488;
+  --blue-700: #0F766E;
+  --sky-400: #2DD4BF;
+  --sky-500: #14B8A6;
+  --primary-gradient: linear-gradient(135deg, #0D9488, #2DD4BF);
+  --primary-gradient-soft: linear-gradient(135deg, rgba(13,148,136,0.1), rgba(45,212,191,0.08));
+  --primary-shadow: 0 4px 12px rgba(13,148,136,0.25);
+  --primary-shadow-hover: 0 6px 20px rgba(13,148,136,0.3);
+  --shadow: 0 4px 16px rgba(13,148,136,0.08), 0 2px 6px rgba(0,0,0,0.04);
+  --shadow-lg: 0 20px 60px rgba(13,148,136,0.12), 0 8px 24px rgba(0,0,0,0.06);
+}
+
+/* ===== 主题：石墨灰 ===== */
+[data-theme="slate"] {
+  --blue-50: #F8FAFC;
+  --blue-100: #F1F5F9;
+  --blue-200: #CBD5E1;
+  --blue-400: #94A3B8;
+  --blue-500: #64748B;
+  --blue-600: #475569;
+  --blue-700: #334155;
+  --sky-400: #94A3B8;
+  --sky-500: #64748B;
+  --primary-gradient: linear-gradient(135deg, #334155, #64748B);
+  --primary-gradient-soft: linear-gradient(135deg, rgba(51,65,85,0.1), rgba(100,116,139,0.08));
+  --primary-shadow: 0 4px 12px rgba(51,65,85,0.25);
+  --primary-shadow-hover: 0 6px 20px rgba(51,65,85,0.3);
+  --shadow: 0 4px 16px rgba(51,65,85,0.08), 0 2px 6px rgba(0,0,0,0.04);
+  --shadow-lg: 0 20px 60px rgba(51,65,85,0.12), 0 8px 24px rgba(0,0,0,0.06);
+}
+
+/* Toast 提示 */
+.toast-tip {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15,23,42,0.88);
+  color: white;
+  padding: 10px 22px;
+  border-radius: 24px;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 9999;
+  pointer-events: none;
+  animation: toastIn .2s ease;
+}
+@keyframes toastIn { from{opacity:0;transform:translateX(-50%) translateY(8px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+

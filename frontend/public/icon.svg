@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2563EB;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#38BDF8;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#DBEAFE;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#BFDBFE;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Cloud body -->
+  <ellipse cx="50" cy="62" rx="32" ry="18" fill="url(#grad1)"/>
+  <circle cx="36" cy="56" r="16" fill="url(#grad1)"/>
+  <circle cx="58" cy="50" r="20" fill="url(#grad1)"/>
+  <!-- Upward arrow -->
+  <polygon points="50,28 42,44 46,44 46,58 54,58 54,44 58,44" fill="white" opacity="0.95"/>
+</svg>
