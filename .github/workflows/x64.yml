@@ -1,0 +1,61 @@
+name: build linux x86_64 musl
+
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-x86_64-musl:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 1. 构建前端（必须先于后端：dist 会在编译期内嵌）────────────────────
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      # ── 2. Rust 工具链（stable，支持 edition 2024）────────────────────────
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+          key: cargo-musl-x86_64-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-musl-x86_64-
+
+      # ── 3. 原生编译：x86_64 宿主机 + musl 目标，仅需 musl-gcc 作为链接器 ────
+      - name: Install musl tools
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Build (x86_64-unknown-linux-musl, release)
+        env:
+          CARGO_TARGET_x86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+        run: cargo build --release --target x86_64-unknown-linux-musl
+
+      - name: Collect artifact
+        run: |
+          cp target/x86_64-unknown-linux-musl/release/cloudone cloudone-linux-x86_64
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: test
+          prerelease: true
+          files: cloudone-linux-x86_64

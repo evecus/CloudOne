@@ -1,8 +1,5 @@
 name: build linux arm64 musl
 
-# 在 ubuntu-24.04-arm 原生 ARM64 Runner 上编译 aarch64 musl 静态二进制（无需 cross/Docker 交叉编译）。
-# 前端先构建进 frontend/dist，随后由 build.rs 在编译期内嵌到二进制中。
-
 on:
   workflow_dispatch:
 
@@ -53,14 +50,11 @@ jobs:
 
       - name: Collect artifact
         run: |
-          cp target/aarch64-unknown-linux-musl/release/cloudone cloudone-linux-arm64-musl
-          chmod +x cloudone-linux-arm64-musl
-          file cloudone-linux-arm64-musl
-          ls -lh cloudone-linux-arm64-musl
+          cp target/aarch64-unknown-linux-musl/release/cloudone cloudone-linux-arm64
       
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: test
           prerelease: true
-          files: cloudone-linux-arm64-musl
+          files: cloudone-linux-arm64
