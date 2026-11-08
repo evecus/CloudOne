@@ -285,7 +285,9 @@ pub fn insert_user(db: &Db, username: &str, password_hash: &str, now: &str) -> R
     Ok(id as i64)
 }
 
-/// 更新用户名 / 密码 / token_version（对齐 Go UpdateUser 全量更新）
+/// 更新用户名 / 密码 / token_version。
+/// 安全约束：改名时校验新用户名未被其他账号占用（防止通过改名劫持
+/// 已存在用户名的登录索引），并同步清理旧用户名索引（防止旧名残留可登录）。
 pub fn update_user_db(
     db: &Db,
     id: i64,
@@ -302,13 +304,22 @@ pub fn update_user_db(
             .map(|v| parse_user(v.value()))
             .transpose()?
             .ok_or_else(|| anyhow::anyhow!("user not found"))?;
+        let old_username = u.username.clone();
+        if username != old_username {
+            let mut idx = txn.open_table(T_USER_IDX)?;
+            if let Some(existing) = idx.get(username)?.map(|g| g.value())
+                && existing != id as u64
+            {
+                anyhow::bail!("username already taken");
+            }
+            idx.remove(old_username.as_str())?;
+            idx.insert(username, id as u64)?;
+        }
         u.username = username.to_string();
         u.password = password_hash.to_string();
         u.token_version = token_version;
         u.updated_at = now.to_string();
         users.insert(id as u64, user_bytes(&u)?.as_slice())?;
-        let mut idx = txn.open_table(T_USER_IDX)?;
-        idx.insert(username, id as u64)?;
     }
     txn.commit()?;
     Ok(())
@@ -649,4 +660,36 @@ pub async fn list_dir(state: &AppState, rel: &str) -> Result<Vec<FileInfo>> {
         }
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rename_user_duplicate_rejected_and_old_idx_cleaned() {
+        let dir = std::env::temp_dir().join(format!("c1db-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let db = open_db(&dir.join("test.redb")).unwrap();
+        init_db(&db).unwrap();
+        let id1 = insert_user(&db, "alice", "h1", "now").unwrap();
+        let id2 = insert_user(&db, "bob", "h2", "now").unwrap();
+
+        // 改名到已存在的用户名 → 拒绝（防劫持 user_idx）
+        assert!(update_user_db(&db, id2, "alice", "h2", 0, "now").is_err());
+        // idx 未被破坏：alice 仍指向 id1，bob 仍指向 id2
+        assert_eq!(get_user_by_username(&db, "alice").unwrap().unwrap().id, id1);
+        assert_eq!(get_user_by_username(&db, "bob").unwrap().unwrap().id, id2);
+
+        // 正常改名：旧索引清理、新索引生效
+        update_user_db(&db, id2, "carol", "h2", 0, "now").unwrap();
+        assert!(get_user_by_username(&db, "bob").unwrap().is_none());
+        assert_eq!(get_user_by_username(&db, "carol").unwrap().unwrap().id, id2);
+        // 改回自己的旧名也允许
+        update_user_db(&db, id2, "bob", "h2", 0, "now").unwrap();
+        assert_eq!(get_user_by_username(&db, "bob").unwrap().unwrap().id, id2);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

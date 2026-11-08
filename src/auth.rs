@@ -103,7 +103,20 @@ impl AuthReq {
     }
 }
 
-pub async fn setup(State(state): State<AppState>, Json(req): Json<AuthReq>) -> Response {
+pub async fn setup(
+    State(state): State<AppState>,
+    ConnectInfo(addr): ConnectInfo<std::net::SocketAddr>,
+    headers: HeaderMap,
+    Json(req): Json<AuthReq>,
+) -> Response {
+    // 防抢注：setup 与登录共用限流（5/min/IP），防止首次部署窗口被公网扫描器
+    // 抢先注册管理员账号
+    if !state.login_limiter.allow(real_ip(&headers, addr)).await {
+        return json_error(
+            StatusCode::TOO_MANY_REQUESTS,
+            "too many requests, please try again later",
+        );
+    }
     if let Some(resp) = req.validate() {
         return resp;
     }
@@ -139,14 +152,15 @@ pub async fn login(
     headers: HeaderMap,
     Json(req): Json<AuthReq>,
 ) -> Response {
-    if let Some(resp) = req.validate() {
-        return resp;
-    }
+    // 限流在参数校验之前：无效请求同样计数（对齐 Go Login 首行 Allow）
     if !state.login_limiter.allow(real_ip(&headers, addr)).await {
         return json_error(
             StatusCode::TOO_MANY_REQUESTS,
             "too many login attempts, please try again later",
         );
+    }
+    if let Some(resp) = req.validate() {
+        return resp;
     }
     let row = get_user_by_username(&state.db, &req.username).ok().flatten();
     let Some(row) = row else {
@@ -205,7 +219,13 @@ pub async fn update_user(State(state): State<AppState>, req0: Request<Body>) -> 
     };
     let now = now_string();
     if let Err(e) = update_user_db(&state.db, user.id, &username, &password, version, &now) {
-        return json_error(StatusCode::INTERNAL_SERVER_ERROR, e);
+        let msg = e.to_string();
+        let code = if msg.contains("already taken") {
+            StatusCode::BAD_REQUEST
+        } else {
+            StatusCode::INTERNAL_SERVER_ERROR
+        };
+        return json_error(code, msg);
     }
     let user = get_user_by_id(&state.db, user.id).unwrap();
     let mut resp = json!({"user": user});

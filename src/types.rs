@@ -93,6 +93,8 @@ pub struct AppState {
     pub master_key: Arc<[u8; 32]>,
     pub login_limiter: Arc<RateLimiter>,
     pub webdav_limiter: Arc<RateLimiter>,
+    /// 公开分享访问限流（防分享码爆破枚举）
+    pub share_limiter: Arc<RateLimiter>,
     /// CLOUDONE_ORIGIN：允许的跨域来源，空 = 仅允许无 Origin / "null"
     pub allowed_origin: String,
 }

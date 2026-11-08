@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use axum::{
     Json,
-    extract::{Multipart, Path as AxPath, Query, State},
+    extract::{ConnectInfo, Multipart, Path as AxPath, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
@@ -34,7 +34,7 @@ use crate::db::{
 use crate::types::{AppState, Settings};
 use crate::util::{
     copy_path, is_danger_path, is_private_ip, json_error, normalize_path, ok_json, path_clean,
-    remove_all, safe_name,
+    real_ip, remove_all, safe_name,
 };
 
 // ── Request types ─────────────────────────────────────────────────────────────
@@ -653,9 +653,18 @@ pub async fn delete_share(
 
 pub async fn access_share(
     State(state): State<AppState>,
+    ConnectInfo(addr): ConnectInfo<std::net::SocketAddr>,
+    headers: axum::http::HeaderMap,
     AxPath(code): AxPath<String>,
     Query(q): Query<PathQuery>,
 ) -> Response {
+    // 防分享码爆破枚举：同一 IP 每分钟最多 30 次访问
+    if !state.share_limiter.allow(real_ip(&headers, addr)).await {
+        return json_error(
+            StatusCode::TOO_MANY_REQUESTS,
+            "too many requests, please try again later",
+        );
+    }
     let link = match get_share(&state.db, &code, false) {
         Ok(l) => l,
         Err(_) => return json_error(StatusCode::NOT_FOUND, "not found"),
@@ -676,9 +685,17 @@ pub async fn access_share(
 
 pub async fn download_share(
     State(state): State<AppState>,
+    ConnectInfo(addr): ConnectInfo<std::net::SocketAddr>,
+    headers: axum::http::HeaderMap,
     AxPath(code): AxPath<String>,
     Query(q): Query<PathQuery>,
 ) -> Response {
+    if !state.share_limiter.allow(real_ip(&headers, addr)).await {
+        return json_error(
+            StatusCode::TOO_MANY_REQUESTS,
+            "too many requests, please try again later",
+        );
+    }
     let link = match get_share(&state.db, &code, true) {
         Ok(l) => l,
         Err(_) => return json_error(StatusCode::NOT_FOUND, "not found"),
@@ -713,7 +730,18 @@ pub async fn download_share(
     serve_file_path(fm.abs_path(&path), true).await
 }
 
-pub async fn serve_share_raw(State(state): State<AppState>, AxPath(code): AxPath<String>) -> Response {
+pub async fn serve_share_raw(
+    State(state): State<AppState>,
+    ConnectInfo(addr): ConnectInfo<std::net::SocketAddr>,
+    headers: axum::http::HeaderMap,
+    AxPath(code): AxPath<String>,
+) -> Response {
+    if !state.share_limiter.allow(real_ip(&headers, addr)).await {
+        return json_error(
+            StatusCode::TOO_MANY_REQUESTS,
+            "too many requests, please try again later",
+        );
+    }
     let link = match get_share(&state.db, &code, true) {
         Ok(l) => l,
         Err(_) => return json_error(StatusCode::NOT_FOUND, "not found"),

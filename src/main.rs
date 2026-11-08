@@ -142,10 +142,12 @@ async fn main() -> Result<()> {
         master_key: Arc::new(master_key),
         login_limiter: Arc::new(RateLimiter::new(5, Duration::from_secs(60))),
         webdav_limiter: Arc::new(RateLimiter::new(10, Duration::from_secs(60))),
+        share_limiter: Arc::new(RateLimiter::new(30, Duration::from_secs(60))),
         allowed_origin: std::env::var("CLOUDONE_ORIGIN").unwrap_or_default(),
     };
     state.login_limiter.spawn_cleanup();
     state.webdav_limiter.spawn_cleanup();
+    state.share_limiter.spawn_cleanup();
 
     let app = build_router(state);
     let addr = format!("{}:{}", args.host, args.port);
