@@ -1,6 +1,5 @@
-# CloudOne (Rust)
+# CloudOne
 
-CloudOne 的 Rust 后端版本（对齐 Go 版全部行为），前端 Vue3 应用在编译期内嵌进单个二进制文件，部署只需一个可执行文件。
 
 ## 与 Go 版的对应关系
 

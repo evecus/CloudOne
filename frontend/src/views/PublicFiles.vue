@@ -266,6 +266,14 @@ onMounted(load)
 .file-icon svg { width: 15px; height: 15px; }
 .file-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--gray-700); }
 
+/* 移动端长按文件名不触发系统选词/复制气泡 */
+.file-row, .file-row * {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 .col-path { min-width: 0; }
 .path-tag { display: inline-block; max-width: 100%; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--gray-500); background: var(--gray-100); padding: 2px 7px; border-radius: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 

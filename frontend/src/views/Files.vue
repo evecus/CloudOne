@@ -414,6 +414,7 @@
               :class="{ selected: selected.includes(file.path), 'select-mode': selectMode, 'highlight-row': highlightName === file.name }"
               @click="handleRowClick($event, file)"
               @contextmenu.prevent.stop="handleRowContextMenu($event, file)"
+              @selectstart.prevent
               @touchstart.passive="handleTouchStart($event, file)"
               @touchend.passive="handleTouchEnd"
               @touchmove.passive="handleTouchCancel"
@@ -451,6 +452,7 @@
             :class="{ selected: selected.includes(file.path), 'select-mode': selectMode, 'highlight-row': highlightName === file.name }"
             @click="handleRowClick($event, file)"
             @contextmenu.prevent.stop="handleRowContextMenu($event, file)"
+            @selectstart.prevent
             @touchstart.passive="handleTouchStart($event, file)"
             @touchend.passive="handleTouchEnd"
             @touchmove.passive="handleTouchCancel"
@@ -1478,6 +1480,10 @@ function handleTouchStart(e, file) {
   if (selectMode.value) return
   longPressTimer = setTimeout(() => {
     longPressTimer = null
+    // 弹菜单前清除系统选区：部分国产内核即使 user-select:none 仍会启动长按选词，
+    // 清掉 Selection 后蓝色高亮与拖拽手柄会一并消失
+    const sel = window.getSelection()
+    if (sel) sel.removeAllRanges()
     // 移动端固定位置：屏幕水平居中，距底部 80px
     const menuW = 210
     const x = (window.innerWidth - menuW) / 2
@@ -2503,6 +2509,18 @@ watch(() => _route.params.pathMatch, (val) => {
 .file-header { display:grid; padding:11px 28px; background:var(--gray-50); border-bottom:1px solid var(--gray-100); font-size:12px; font-weight:600; color:var(--gray-400); text-transform:uppercase; letter-spacing:.5px; align-items:center; }
 .file-header.has-check { cursor:pointer; }
 .file-row { display:grid; padding:13px 28px; border-bottom:1px solid var(--gray-50); cursor:pointer; transition:var(--transition); align-items:center; }
+
+/* 文件列表内文字一律不可选中：移动端长按文件名时，浏览器内核会启动选词
+   （蓝色高亮 + 拖拽手柄 + 复制气泡），与自定义长按菜单冲突。
+   仅作用于文件行/瓦片，输入框、代码编辑器、终端不受影响。 */
+.file-row, .file-row *,
+.file-tile, .file-tile * {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 .file-row:last-child { border-bottom:none; }
 .file-row:hover { background:var(--blue-50); }
 .file-row.selected { background:rgba(37,99,235,.06); }

@@ -408,6 +408,14 @@ onMounted(loadSettings)
 
 .file-name { font-size: 13px; font-weight: 500; color: var(--gray-700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .file-row:hover .file-name { color: var(--blue-600); }
+
+/* 移动端长按文件名不触发系统选词/复制气泡 */
+.file-row, .file-row * {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
 .col-size, .col-date { font-size: 12px; color: var(--gray-400); }
 
 /* 移动端抽屉 */
