@@ -1,4 +1,4 @@
-name: build linux arm64 musl
+name: linux arm64 ci
 
 on:
   workflow_dispatch:
