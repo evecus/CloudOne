@@ -12,6 +12,7 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
   BIN_NAME: cloudone
+  RELEASE_NAME: CloudOne
 
 jobs:
   build:
@@ -73,10 +74,11 @@ jobs:
         run: |
           mkdir dist
           cp target/${{ matrix.target }}/release/${BIN_NAME} \
-             dist/${BIN_NAME}-${{ matrix.name }}
+             dist/${RELEASE_NAME}-${{ matrix.name }}
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          name: ${RELEASE_NAME} ${{ github.event.inputs.version }}
           tag_name: ${{ github.event.inputs.version }}
           files: dist/*
