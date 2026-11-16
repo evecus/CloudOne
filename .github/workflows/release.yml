@@ -79,6 +79,6 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          name: ${RELEASE_NAME} ${{ github.event.inputs.version }}
+          name: ${{ env.RELEASE_NAME }} ${{ github.event.inputs.version }}
           tag_name: ${{ github.event.inputs.version }}
           files: dist/*
