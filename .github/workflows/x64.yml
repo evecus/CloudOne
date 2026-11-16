@@ -1,4 +1,4 @@
-name: build linux x86_64 musl
+name: linux x86_64 ci
 
 
 on:
