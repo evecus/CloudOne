@@ -6,7 +6,7 @@ on:
       version:
         description: '发布版本号 (例如: v1.0.0)'
         required: true
-        default: 'v0.1.0'
+        default: 'v2.0.0'
 
 env:
   CARGO_TERM_COLOR: always
